@@ -66,10 +66,11 @@ class SurgicalIntegration:
             
             # Determine model path - try multiple possible locations
             possible_paths = [
-                "LatentSync/models/unet3d",
+                "models/latentsync",  # Primary location from download_weights script
                 "LatentSync/checkpoints", 
-                "models/latentsync",
-                "../LatentSync/models/unet3d"
+                "LatentSync/models/unet3d",
+                "../LatentSync/models/unet3d",
+                "checkpoints"  # Alternative LatentSync location
             ]
             
             model_path = None
