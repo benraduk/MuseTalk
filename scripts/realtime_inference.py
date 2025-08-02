@@ -13,7 +13,7 @@ import json
 from transformers import WhisperModel
 
 from musetalk.utils.face_parsing import FaceParsing
-from musetalk.utils.utils import datagen
+from musetalk.utils.utils import datagen, datagen_enhanced
 from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs
 from musetalk.utils.blending import get_image_prepare_material, get_image_blending
 from musetalk.utils.utils import load_all_model
@@ -328,7 +328,7 @@ if __name__ == "__main__":
     parser.add_argument("--fps", type=int, default=25, help="Video frames per second")
     parser.add_argument("--audio_padding_length_left", type=int, default=2, help="Left padding length for audio")
     parser.add_argument("--audio_padding_length_right", type=int, default=2, help="Right padding length for audio")
-    parser.add_argument("--batch_size", type=int, default=20, help="Batch size for inference")
+    parser.add_argument("--batch_size", type=int, default=16, help="Batch size for inference (conservative optimization)")
     parser.add_argument("--output_vid_name", type=str, default=None, help="Name of output video file")
     parser.add_argument("--use_saved_coord", action="store_true", help='Use saved coordinates to save time')
     parser.add_argument("--saved_coord", action="store_true", help='Save coordinates for future use')

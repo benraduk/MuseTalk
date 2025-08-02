@@ -49,7 +49,7 @@ def get_video_fps(video_path):
 def datagen(
     whisper_chunks,
     vae_encode_latents,
-    batch_size=8,
+    batch_size=12,  # Conservative GPU optimization
     delay_frame=0,
     device="cuda:0",
 ):
@@ -72,6 +72,80 @@ def datagen(
         latent_batch = torch.cat(latent_batch, dim=0)
 
         yield whisper_batch.to(device), latent_batch.to(device)
+
+
+def datagen_enhanced(
+    whisper_chunks,
+    vae_encode_latents,
+    coord_list_cycle,
+    frame_list_cycle,
+    passthrough_frames,
+    coord_placeholder=(0.0, 0.0, 0.0, 0.0),
+    batch_size=12,  # Conservative GPU optimization
+    delay_frame=0,
+    device="cuda:0",
+):
+    """
+    Enhanced datagen that handles both lip-sync processing and passthrough frames.
+    Returns batches with processing type information for FaceFusion-style frame handling.
+    """
+    whisper_batch, latent_batch, frame_batch, process_type_batch = [], [], [], []
+    
+    for i, w in enumerate(whisper_chunks):
+        idx = (i + delay_frame) % len(coord_list_cycle)
+        coord = coord_list_cycle[idx]
+        
+        # Check if this is a passthrough frame (no face detected)
+        if coord == coord_placeholder:
+            # Use original frame for passthrough
+            original_idx = idx % len(frame_list_cycle)
+            passthrough_frame = frame_list_cycle[original_idx]
+            
+            whisper_batch.append(w)
+            latent_batch.append(None)  # No latent for passthrough
+            frame_batch.append(passthrough_frame)
+            process_type_batch.append('passthrough')
+        else:
+            # Normal lip-sync processing
+            latent_idx = idx % len(vae_encode_latents)
+            latent = vae_encode_latents[latent_idx]
+            
+            whisper_batch.append(w)
+            latent_batch.append(latent)
+            frame_batch.append(None)  # No original frame needed for processing
+            process_type_batch.append('process')
+        
+        # Yield batch when full
+        if len(whisper_batch) >= batch_size:
+            yield create_enhanced_batch(whisper_batch, latent_batch, frame_batch, process_type_batch, device)
+            whisper_batch, latent_batch, frame_batch, process_type_batch = [], [], [], []
+    
+    # Handle remaining items in the last batch
+    if len(whisper_batch) > 0:
+        yield create_enhanced_batch(whisper_batch, latent_batch, frame_batch, process_type_batch, device)
+
+
+def create_enhanced_batch(whisper_batch, latent_batch, frame_batch, process_type_batch, device):
+    """Helper function to create properly formatted batches for enhanced processing."""
+    # Separate processing and passthrough items
+    process_items = [(w, l) for w, l, t in zip(whisper_batch, latent_batch, process_type_batch) if t == 'process' and l is not None]
+    passthrough_items = [(w, f) for w, f, t in zip(whisper_batch, frame_batch, process_type_batch) if t == 'passthrough' and f is not None]
+    
+    batch_data = {
+        'process_items': process_items,
+        'passthrough_items': passthrough_items,
+        'process_types': process_type_batch,
+        'device': device
+    }
+    
+    # Create tensor batches for processing items
+    if process_items:
+        process_whispers, process_latents = zip(*process_items)
+        batch_data['process_whisper_batch'] = torch.stack(list(process_whispers)).to(device)
+        batch_data['process_latent_batch'] = torch.cat(list(process_latents), dim=0).to(device)
+    
+    return batch_data
+
 
 def cast_training_params(
     model: Union[torch.nn.Module, List[torch.nn.Module]],

@@ -17,7 +17,7 @@ import sys
 from musetalk.utils.blending import get_image
 from musetalk.utils.face_parsing import FaceParsing
 from musetalk.utils.audio_processor import AudioProcessor
-from musetalk.utils.utils import get_file_type, get_video_fps, datagen, load_all_model
+from musetalk.utils.utils import get_file_type, get_video_fps, datagen, datagen_enhanced, load_all_model
 from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder
 
 def fast_check_ffmpeg():
@@ -161,32 +161,49 @@ def main(args):
             
             print(f"Number of frames: {len(frame_list)}")         
             
-            # Process each frame
+            # Process each frame - Enhanced version that handles ALL frames
             input_latent_list = []
-            for bbox, frame in zip(coord_list, frame_list):
+            passthrough_frames = {}
+            processed_frame_count = 0
+            
+            for i, (bbox, frame) in enumerate(zip(coord_list, frame_list)):
                 if bbox == coord_placeholder:
-                    continue
-                x1, y1, x2, y2 = bbox
-                if args.version == "v15":
-                    y2 = y2 + args.extra_margin
-                    y2 = min(y2, frame.shape[0])
-                crop_frame = frame[y1:y2, x1:x2]
-                crop_frame = cv2.resize(crop_frame, (256,256), interpolation=cv2.INTER_LANCZOS4)
-                latents = vae.get_latents_for_unet(crop_frame)
-                input_latent_list.append(latents)
+                    # Store frame for passthrough - no processing needed
+                    input_latent_list.append(None)  # Placeholder in latent list
+                    passthrough_frames[i] = frame
+                    print(f"Frame {i}: No face detected - will use passthrough")
+                else:
+                    # Normal processing for frames with faces
+                    processed_frame_count += 1
+                    x1, y1, x2, y2 = bbox
+                    if args.version == "v15":
+                        y2 = y2 + args.extra_margin
+                        y2 = min(y2, frame.shape[0])
+                    crop_frame = frame[y1:y2, x1:x2]
+                    crop_frame = cv2.resize(crop_frame, (256,256), interpolation=cv2.INTER_LANCZOS4)
+                    latents = vae.get_latents_for_unet(crop_frame)
+                    input_latent_list.append(latents)
+            
+            print(f"Enhanced processing: {processed_frame_count} frames with faces, {len(passthrough_frames)} passthrough frames")
         
             # Smooth first and last frames
             frame_list_cycle = frame_list + frame_list[::-1]
             coord_list_cycle = coord_list + coord_list[::-1]
             input_latent_list_cycle = input_latent_list + input_latent_list[::-1]
             
-            # Batch inference
-            print("Starting inference")
+            # Enhanced batch inference with support for passthrough frames
+            print("Starting enhanced inference")
             video_num = len(whisper_chunks)
             batch_size = args.batch_size
-            gen = datagen(
+            
+            # Use enhanced datagen that handles both processing and passthrough
+            gen = datagen_enhanced(
                 whisper_chunks=whisper_chunks,
                 vae_encode_latents=input_latent_list_cycle,
+                coord_list_cycle=coord_list_cycle,
+                frame_list_cycle=frame_list_cycle,
+                passthrough_frames=passthrough_frames,
+                coord_placeholder=coord_placeholder,
                 batch_size=batch_size,
                 delay_frame=0,
                 device=device,
@@ -195,35 +212,64 @@ def main(args):
             res_frame_list = []
             total = int(np.ceil(float(video_num) / batch_size))
             
-            # Execute inference
-            for i, (whisper_batch, latent_batch) in enumerate(tqdm(gen, total=total)):
-                audio_feature_batch = pe(whisper_batch)
-                latent_batch = latent_batch.to(dtype=unet.model.dtype)
-                
-                pred_latents = unet.model(latent_batch, timesteps, encoder_hidden_states=audio_feature_batch).sample
-                recon = vae.decode_latents(pred_latents)
-                for res_frame in recon:
-                    res_frame_list.append(res_frame)
+            # Execute enhanced inference
+            for i, batch_data in enumerate(tqdm(gen, total=total)):
+                # Handle processing items (frames with faces)
+                if 'process_whisper_batch' in batch_data and 'process_latent_batch' in batch_data:
+                    whisper_batch = batch_data['process_whisper_batch']
+                    latent_batch = batch_data['process_latent_batch']
+                    
+                    audio_feature_batch = pe(whisper_batch)
+                    latent_batch = latent_batch.to(dtype=unet.model.dtype)
+                    
+                    pred_latents = unet.model(latent_batch, timesteps, encoder_hidden_states=audio_feature_batch).sample
+                    recon = vae.decode_latents(pred_latents)
+                    
+                    # Process results according to batch types
+                    process_idx = 0
+                    for process_type in batch_data['process_types']:
+                        if process_type == 'process':
+                            res_frame_list.append(recon[process_idx])
+                            process_idx += 1
+                        else:  # passthrough
+                            # For passthrough frames, we'll handle them in the final output phase
+                            res_frame_list.append(None)  # Placeholder for now
+                else:
+                    # Handle batches with only passthrough items
+                    for process_type in batch_data['process_types']:
+                        res_frame_list.append(None)  # All passthrough, handle in output phase
             
-            # Pad generated images to original video size
-            print("Padding generated images to original video size")
+            # Enhanced frame output with support for passthrough frames  
+            print("Processing enhanced frame output (lip-sync + passthrough)")
             for i, res_frame in enumerate(tqdm(res_frame_list)):
                 bbox = coord_list_cycle[i%(len(coord_list_cycle))]
                 ori_frame = copy.deepcopy(frame_list_cycle[i%(len(frame_list_cycle))])
-                x1, y1, x2, y2 = bbox
-                if args.version == "v15":
-                    y2 = y2 + args.extra_margin
-                    y2 = min(y2, frame.shape[0])
-                try:
-                    res_frame = cv2.resize(res_frame.astype(np.uint8), (x2-x1, y2-y1))
-                except:
-                    continue
                 
-                # Merge results with version-specific parameters
-                if args.version == "v15":
-                    combine_frame = get_image(ori_frame, res_frame, [x1, y1, x2, y2], mode=args.parsing_mode, fp=fp)
+                # Handle passthrough frames (no face detected)
+                if bbox == coord_placeholder or res_frame is None:
+                    # Use original frame unchanged - perfect for cutaways!
+                    combine_frame = ori_frame
+                    print(f"Frame {i}: Using passthrough (no face)")
                 else:
-                    combine_frame = get_image(ori_frame, res_frame, [x1, y1, x2, y2], fp=fp)
+                    # Normal lip-sync processing for frames with faces
+                    x1, y1, x2, y2 = bbox
+                    if args.version == "v15":
+                        y2 = y2 + args.extra_margin
+                        y2 = min(y2, frame.shape[0])
+                    
+                    try:
+                        res_frame = cv2.resize(res_frame.astype(np.uint8), (x2-x1, y2-y1))
+                        
+                        # Merge results with version-specific parameters  
+                        if args.version == "v15":
+                            combine_frame = get_image(ori_frame, res_frame, [x1, y1, x2, y2], mode=args.parsing_mode, fp=fp)
+                        else:
+                            combine_frame = get_image(ori_frame, res_frame, [x1, y1, x2, y2], fp=fp)
+                    except Exception as e:
+                        print(f"Frame {i}: Processing failed, using passthrough - {e}")
+                        combine_frame = ori_frame
+                
+                # ALWAYS write frame - ensures perfect video continuity
                 cv2.imwrite(f"{result_img_save_path}/{str(i).zfill(8)}.png", combine_frame)
 
             # Save prediction results
@@ -263,7 +309,7 @@ if __name__ == "__main__":
     parser.add_argument("--fps", type=int, default=25, help="Video frames per second")
     parser.add_argument("--audio_padding_length_left", type=int, default=2, help="Left padding length for audio")
     parser.add_argument("--audio_padding_length_right", type=int, default=2, help="Right padding length for audio")
-    parser.add_argument("--batch_size", type=int, default=8, help="Batch size for inference")
+    parser.add_argument("--batch_size", type=int, default=12, help="Batch size for inference (conservative optimization)")
     parser.add_argument("--output_vid_name", type=str, default=None, help="Name of output video file")
     parser.add_argument("--use_saved_coord", action="store_true", help='Use saved coordinates to save time')
     parser.add_argument("--saved_coord", action="store_true", help='Save coordinates for future use')
