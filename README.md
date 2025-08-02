@@ -1,4 +1,4 @@
-# MuseTalk Enhanced - Surgical Integration with LatentSync
+# BraivTalk - Surgical Integration with LatentSync
 
 <strong>Advanced Audio-Driven Lip-Sync with Cutaway Handling and Optional LatentSync Integration</strong>
 
@@ -61,12 +61,12 @@ Explore our comprehensive architecture documentation:
 ### **1. Clone and Setup**
 
 ```bash
-git clone https://github.com/your-org/musetalk-enhanced.git
-cd musetalk-enhanced
+git clone https://github.com/your-org/braivtalk.git
+cd braivtalk
 
 # Setup environment (recommended)
-conda create -n musetalk-enhanced python=3.10
-conda activate musetalk-enhanced
+conda create -n braivtalk python=3.10
+conda activate braivtalk
 
 # Install dependencies
 pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118
@@ -151,7 +151,7 @@ Open `http://localhost:7860` for the web interface.
 ### **Project Structure**
 
 ```
-musetalk-enhanced/
+braivtalk/
 ├── scripts/
 │   ├── inference.py              # Main inference with cutaway handling
 │   ├── hybrid_inference.py       # Surgical LatentSync integration
@@ -181,12 +181,12 @@ musetalk-enhanced/
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/musetalk-enhanced.git
-cd musetalk-enhanced
+git clone https://github.com/your-org/braivtalk.git
+cd braivtalk
 
 # Create development environment
-conda create -n musetalk-dev python=3.10
-conda activate musetalk-dev
+conda create -n braivtalk-dev python=3.10
+conda activate braivtalk-dev
 
 # Install dependencies (see Quick Start section)
 pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118
@@ -351,5 +351,5 @@ This project builds upon MuseTalk (Apache 2.0) and incorporates concepts from La
 
 ---
 
-*Enhanced MuseTalk - Surgical Integration v2.0.0*  
+*BraivTalk - Surgical Integration v2.0.0*  
 *Last updated: January 2025*
