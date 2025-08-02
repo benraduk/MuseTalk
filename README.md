@@ -61,7 +61,7 @@ Explore our comprehensive architecture documentation:
 ### **1. Clone and Setup**
 
 ```bash
-git clone https://github.com/your-org/braivtalk.git
+git clone https://github.com/benraduk/braivtalk.git
 cd braivtalk
 
 # Setup environment (recommended)
