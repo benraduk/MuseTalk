@@ -7,16 +7,30 @@ import cv2
 import pickle
 import os
 import json
-from mmpose.apis import inference_topdown, init_model
-from mmpose.structures import merge_data_samples
+# SURGICAL ELIMINATION: Make mmpose optional (only needed for pose detection, not face detection)
+try:
+    from mmpose.apis import inference_topdown, init_model
+    from mmpose.structures import merge_data_samples
+    MMPOSE_AVAILABLE = True
+except ImportError:
+    MMPOSE_AVAILABLE = False
+    inference_topdown = None
+    init_model = None
+    merge_data_samples = None
+    print("⚠️  mmpose not available - pose detection disabled (face detection still works)")
 import torch
 from tqdm import tqdm
 
-# initialize the mmpose model
+# initialize the mmpose model (only if available)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-config_file = './musetalk/utils/dwpose/rtmpose-l_8xb32-270e_coco-ubody-wholebody-384x288.py'
-checkpoint_file = './models/dwpose/dw-ll_ucoco_384.pth'
-model = init_model(config_file, checkpoint_file, device=device)
+if MMPOSE_AVAILABLE:
+    config_file = './musetalk/utils/dwpose/rtmpose-l_8xb32-270e_coco-ubody-wholebody-384x288.py'
+    checkpoint_file = './models/dwpose/dw-ll_ucoco_384.pth'
+    model = init_model(config_file, checkpoint_file, device=device)
+    print("✅ DWPose model loaded for pose detection")
+else:
+    model = None
+    print("⚠️  DWPose disabled - using face detection only (surgical elimination)")
 
 # initialize the face detection model
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -94,42 +108,57 @@ def get_landmark_and_bbox(img_list,upperbondrange =0):
     average_range_minus = []
     average_range_plus = []
     for fb in tqdm(batches):
-        results = inference_topdown(model, np.asarray(fb)[0])
-        results = merge_data_samples(results)
-        keypoints = results.pred_instances.keypoints
-        face_land_mark= keypoints[0][23:91]
-        face_land_mark = face_land_mark.astype(np.int32)
+        # SURGICAL ELIMINATION: Make mmpose pose detection optional
+        if MMPOSE_AVAILABLE and model is not None:
+            # Use mmpose for pose detection when available
+            results = inference_topdown(model, np.asarray(fb)[0])
+            results = merge_data_samples(results)
+            keypoints = results.pred_instances.keypoints
+            face_land_mark= keypoints[0][23:91]
+            face_land_mark = face_land_mark.astype(np.int32)
+        else:
+            # Fallback: Use face detection only (no pose detection)
+            face_land_mark = None
         
-        # get bounding boxes by face detetion
+        # get bounding boxes by face detetion (always works)
         bbox = fa.get_detections_for_batch(np.asarray(fb))
         
-        # adjust the bounding box refer to landmark
+        # adjust the bounding box refer to landmark (if available)
         # Add the bounding box to a tuple and append it to the coordinates list
         for j, f in enumerate(bbox):
             if f is None: # no face in the image
                 coords_list += [coord_placeholder]
                 continue
             
-            half_face_coord =  face_land_mark[29]#np.mean([face_land_mark[28], face_land_mark[29]], axis=0)
-            range_minus = (face_land_mark[30]- face_land_mark[29])[1]
-            range_plus = (face_land_mark[29]- face_land_mark[28])[1]
-            average_range_minus.append(range_minus)
-            average_range_plus.append(range_plus)
-            if upperbondrange != 0:
-                half_face_coord[1] = upperbondrange+half_face_coord[1] #手动调整  + 向下（偏29）  - 向上（偏28）
-            half_face_dist = np.max(face_land_mark[:,1]) - half_face_coord[1]
-            min_upper_bond = 0
-            upper_bond = max(min_upper_bond, half_face_coord[1] - half_face_dist)
-            
-            f_landmark = (np.min(face_land_mark[:, 0]),int(upper_bond),np.max(face_land_mark[:, 0]),np.max(face_land_mark[:,1]))
-            x1, y1, x2, y2 = f_landmark
-            
-            if y2-y1<=0 or x2-x1<=0 or x1<0: # if the landmark bbox is not suitable, reuse the bbox
-                coords_list += [f]
-                w,h = f[2]-f[0], f[3]-f[1]
-                print("error bbox:",f)
+            # SURGICAL ELIMINATION: Use landmark-based adjustment only if mmpose is available
+            if MMPOSE_AVAILABLE and model is not None and face_land_mark is not None:
+                # Use mmpose landmarks for precise bounding box adjustment
+                half_face_coord =  face_land_mark[29]#np.mean([face_land_mark[28], face_land_mark[29]], axis=0)
+                range_minus = (face_land_mark[30]- face_land_mark[29])[1]
+                range_plus = (face_land_mark[29]- face_land_mark[28])[1]
+                average_range_minus.append(range_minus)
+                average_range_plus.append(range_plus)
+                if upperbondrange != 0:
+                    half_face_coord[1] = upperbondrange+half_face_coord[1] #手动调整  + 向下（偏29）  - 向上（偏28）
+                half_face_dist = np.max(face_land_mark[:,1]) - half_face_coord[1]
+                min_upper_bond = 0
+                upper_bond = max(min_upper_bond, half_face_coord[1] - half_face_dist)
+                
+                f_landmark = (np.min(face_land_mark[:, 0]),int(upper_bond),np.max(face_land_mark[:, 0]),np.max(face_land_mark[:,1]))
+                x1, y1, x2, y2 = f_landmark
+                
+                if y2-y1<=0 or x2-x1<=0 or x1<0: # if the landmark bbox is not suitable, reuse the bbox
+                    coords_list += [f]
+                    w,h = f[2]-f[0], f[3]-f[1]
+                    print("error bbox:",f)
+                else:
+                    coords_list += [f_landmark]
             else:
-                coords_list += [f_landmark]
+                # Fallback: Use face detection bbox directly (no landmark adjustment)
+                coords_list += [f]
+                # Add dummy values for range calculation to avoid division by zero
+                average_range_minus.append(10)  # Default reasonable values
+                average_range_plus.append(10)
     
     print("********************************************bbox_shift parameter adjustment**********************************************************")
     print(f"Total frame:「{len(frames)}」 Manually adjust range : [ -{int(sum(average_range_minus) / len(average_range_minus))}~{int(sum(average_range_plus) / len(average_range_plus))} ] , the current value: {upperbondrange}")

@@ -18,6 +18,7 @@ from musetalk.utils.blending import get_image
 from musetalk.utils.face_parsing import FaceParsing
 from musetalk.utils.audio_processor import AudioProcessor
 from musetalk.utils.utils import get_file_type, get_video_fps, datagen, datagen_enhanced, load_all_model
+from scripts.hybrid_inference import surgical_unet3d_inference
 from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder
 
 def fast_check_ffmpeg():
@@ -222,7 +223,8 @@ def main(args):
                     audio_feature_batch = pe(whisper_batch)
                     latent_batch = latent_batch.to(dtype=unet.model.dtype)
                     
-                    pred_latents = unet.model(latent_batch, timesteps, encoder_hidden_states=audio_feature_batch).sample
+                    # 🔄 SURGICAL REPLACEMENT: LatentSync UNet3D with MuseTalk fallback
+                    pred_latents = surgical_unet3d_inference(latent_batch, audio_feature_batch, timesteps, unet.model)
                     recon = vae.decode_latents(pred_latents)
                     
                     # Process results according to batch types
@@ -274,13 +276,30 @@ def main(args):
 
             # Save prediction results
             temp_vid_path = f"{temp_dir}/temp_{input_basename}_{audio_basename}.mp4"
-            cmd_img2video = f"ffmpeg -y -v warning -r {fps} -f image2 -i {result_img_save_path}/%08d.png -vcodec libx264 -vf format=yuv420p -crf 18 {temp_vid_path}"
+            # Fix path separators for FFmpeg compatibility
+            result_img_save_path_fixed = result_img_save_path.replace("\\", "/")
+            temp_vid_path_fixed = temp_vid_path.replace("\\", "/")
+            cmd_img2video = f"ffmpeg -y -v warning -r {fps} -f image2 -i {result_img_save_path_fixed}/%08d.png -vcodec libx264 -vf format=yuv420p -crf 18 {temp_vid_path_fixed}"
             print("Video generation command:", cmd_img2video)
-            os.system(cmd_img2video)   
+            try:
+                subprocess.run(cmd_img2video, shell=True, check=True)
+                print("✅ Video generation successful")
+            except subprocess.CalledProcessError as e:
+                print(f"❌ Video generation failed: {e}")
+                return
             
-            cmd_combine_audio = f"ffmpeg -y -v warning -i {audio_path} -i {temp_vid_path} {output_vid_name}"
+            # Fix paths for audio combination
+            audio_path_fixed = audio_path.replace("\\", "/")
+            output_vid_name_fixed = output_vid_name.replace("\\", "/")
+            cmd_combine_audio = f"ffmpeg -y -v warning -i {audio_path_fixed} -i {temp_vid_path_fixed} {output_vid_name_fixed}"
             print("Audio combination command:", cmd_combine_audio) 
-            os.system(cmd_combine_audio)
+            try:
+                subprocess.run(cmd_combine_audio, shell=True, check=True)
+                print("✅ Audio combination successful")
+                print(f"🎬 Final video created: {output_vid_name_fixed}")
+            except subprocess.CalledProcessError as e:
+                print(f"❌ Audio combination failed: {e}")
+                return
             
             # Clean up temporary files
             shutil.rmtree(result_img_save_path)

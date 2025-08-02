@@ -35,24 +35,24 @@ REM Step 1: Create conda environment
 echo.
 echo ================================================================================
 echo 🔧 STEP 1: Create Conda Environment
-echo Creating musetalk_surgical with Python 3.10
+echo Creating braivtalk with Python 3.10
 echo ================================================================================
 
-conda env list | findstr "musetalk_surgical" >nul
+conda env list | findstr "braivtalk" >nul
 if %errorlevel% equ 0 (
-    echo ⚠️  Environment musetalk_surgical already exists
+    echo ⚠️  Environment braivtalk already exists
     set /p "recreate=Remove and recreate? (y/N): "
     if /i "!recreate!"=="y" (
         echo 🗑️  Removing existing environment...
-        conda env remove --name musetalk_surgical --yes
+        conda env remove --name braivtalk --yes
     ) else (
         echo Using existing environment...
     )
 )
 
-conda env list | findstr "musetalk_surgical" >nul
+conda env list | findstr "braivtalk" >nul
 if %errorlevel% neq 0 (
-    conda create --name musetalk_surgical python=3.10 --yes
+    conda create --name braivtalk python=3.10 --yes
     if %errorlevel% neq 0 (
         echo ❌ Failed to create conda environment
         pause
@@ -60,7 +60,7 @@ if %errorlevel% neq 0 (
     )
 )
 
-echo ✅ Environment musetalk_surgical ready
+echo ✅ Environment braivtalk ready
 
 REM Step 2: Install PyTorch
 echo.
@@ -69,7 +69,7 @@ echo 🔧 STEP 2: Install PyTorch
 echo Installing PyTorch 2.2.0 (middle ground for compatibility)
 echo ================================================================================
 
-call conda activate musetalk_surgical
+call conda activate braivtalk
 
 echo Installing PyTorch 2.2.0 with CUDA 11.8...
 pip install torch==2.2.0 torchvision==0.17.0 torchaudio==2.2.0 --index-url https://download.pytorch.org/whl/cu118
@@ -217,8 +217,8 @@ echo ===========================================================================
 (
 echo @echo off
 echo echo 🔧 Activating Surgical MuseTalk Environment
-echo conda activate musetalk_surgical
-echo echo ✅ Environment activated: musetalk_surgical
+echo conda activate braivtalk
+echo echo ✅ Environment activated: braivtalk
 echo echo.
 echo echo 🎯 To run inference:
 echo echo    python -m scripts.inference --inference_config configs\inference\test.yaml --result_dir results\test --unet_model_path models\musetalkV15\unet.pth --unet_config models\musetalkV15\musetalk.json --version v15 --ffmpeg_path ffmpeg-master-latest-win64-gpl-shared\bin
@@ -236,7 +236,7 @@ echo ===========================================================================
 
 echo.
 echo 📋 WHAT WAS INSTALLED:
-echo    ✅ Conda environment: musetalk_surgical
+echo    ✅ Conda environment: braivtalk
 echo    ✅ PyTorch 2.2.0 (middle ground - eliminates version conflicts)
 echo    ✅ Surgical requirements (70%% conflict reduction)
 echo    ✅ FFmpeg setup
@@ -253,7 +253,7 @@ echo    ❌ ~12+ dependency conflicts → 0 conflicts
 echo.
 echo 🚀 TO GET STARTED:
 echo    1. Activate environment: activate_surgical.bat
-echo    2. Or manually: conda activate musetalk_surgical
+echo    2. Or manually: conda activate braivtalk
 echo    3. Test installation: python test_surgical_requirements.py
 echo    4. Run inference with your videos!
 
