@@ -21,6 +21,9 @@ imageio[ffmpeg]
 
 # FaceFusion-inspired dependencies for multi-angle processing
 onnx>=1.17.0
-onnxruntime>=1.22.0
+onnxruntime-gpu>=1.22.0  # GPU acceleration for face detection/landmarks
 scipy>=1.15.0
 psutil>=7.0.0
+
+# Fallback for systems without CUDA
+# If onnxruntime-gpu fails, manually install: pip install onnxruntime>=1.22.0
