@@ -23,19 +23,21 @@ Improve mouth alignment accuracy for non-frontal faces by implementing angle-awa
 Understand face orientations in our videos and correlate with alignment issues.
 
 ### **Tasks**
-- [ ] **1.1** Add face angle estimation function to `musetalk/utils/preprocessing.py`
+- [x] **1.1** Add face angle estimation function to `musetalk/utils/preprocessing.py`
   - Use FaceFusion's exact jaw line method (landmarks 0 and 16)
   - Discretize to 5 angles: 0°, 90°, 180°, 270°, 360°
   - Classify as: Frontal (±30°), Left Profile, Right Profile, Angled
-- [ ] **1.2** Log angle detection results during preprocessing
+- [x] **1.2** Log angle detection results during preprocessing
   - Output angle for each detected face
   - Create angle distribution report
-- [ ] **1.3** Test on problematic video
+- [x] **1.3** Test on problematic video
   - Run enhanced preprocessing on test video with misalignment issues
   - Identify which frames/angles cause problems
-- [ ] **1.4** Create angle visualization tool
+- [x] **1.4** Create angle visualization tool ✅ **COMPLETED**
   - Generate debug images showing detected angles
   - Overlay angle information on frames
+  - Create angle distribution charts
+  - **Result**: `scripts/visualize_face_angles.py` tool created with full debugging capabilities
 
 ### **Expected Outcomes**
 - Clear understanding of face angle distribution in test videos
@@ -54,155 +56,225 @@ Understand face orientations in our videos and correlate with alignment issues.
 
 ---
 
-## **Phase 2: Hybrid Quality + Angle Filtering** 
+## **Phase 2: Enhanced Face Detection & Quality Scoring** 
 **Priority**: HIGH | **Complexity**: LOW | **Timeline**: Week 2
 
 ### **Goal**
-Eliminate misaligned mouths using FaceFusion-inspired quality + angle filtering.
+Upgrade face detection to FaceFusion-style multi-angle detection with quality scoring.
 
 ### **Tasks**
-- [ ] **2.1** Implement hybrid face filtering (FaceFusion approach)
-  - Add face quality scoring (detector + landmarker scores)
-  - Combine quality thresholds with angle limits
-  - Use passthrough for low-quality OR highly-angled faces
-- [ ] **2.2** Add configurable filtering thresholds
-  - Make quality and angle limits adjustable via config
-  - Test different threshold combinations
-- [ ] **2.3** Enhance passthrough logic
-  - Extend existing cutaway passthrough to handle filtered faces
-  - Ensure smooth video continuity
-- [ ] **2.4** Performance testing
-  - Compare pure angle vs. hybrid filtering
-  - Measure quality improvement vs. processing coverage
+- [ ] **2.1** Integrate FaceFusion face detection models
+  - Add SCRFD/YOLO_Face detection alongside existing FaceAlignment
+  - Implement multi-angle detection (0°, 90°, 180°, 270°)
+  - Select best detection across all angles
+- [ ] **2.2** Implement face quality scoring system
+  - Add detector confidence scores
+  - Add landmark quality scoring  
+  - Combine scores for overall face quality metric
+- [ ] **2.3** Smart filtering with quality + angle thresholds
+  - Filter faces below quality threshold OR above angle threshold
+  - Use passthrough for filtered faces (maintain existing cutaway logic)
+  - Make thresholds configurable
+- [ ] **2.4** Performance and quality validation
+  - Compare new detection vs. original on test videos
+  - Measure improvement in detection accuracy
+  - Ensure no regression in processing speed
 
 ### **Expected Outcomes**
-- Zero "mouth on cheek" artifacts (better than pure angle filtering)
-- Optimal balance between quality and coverage
-- Maintained video continuity and audio sync
+- Better face detection for angled faces
+- Quality-based filtering reduces artifacts
+- Foundation for rotation normalization in Phase 3
+- Maintained video continuity with smart passthrough
 
 ### **Files to Modify**
-- `musetalk/utils/preprocessing.py` - Add quality scoring and hybrid filtering
-- `musetalk/utils/utils.py` - Extend passthrough in datagen
-- `configs/inference/` - Add quality + angle threshold parameters
+- `musetalk/utils/preprocessing.py` - Integrate FaceFusion detection
+- `musetalk/utils/utils.py` - Update datagen for quality scores
+- `configs/inference/` - Add detection model and threshold parameters
+- `requirements.txt` - Add FaceFusion dependencies
 
 ### **Success Criteria**
-- [ ] No misaligned mouths in test videos
-- [ ] Higher processing coverage than pure angle filtering
-- [ ] Configurable quality + angle thresholds working
-- [ ] Quality improvement documented with metrics
+- [ ] Multi-angle face detection working
+- [ ] Quality scoring system operational
+- [ ] Improved detection on angled faces (measurable)
+- [ ] No performance regression
+- [ ] Configurable thresholds working
 
 ---
 
-## **Phase 3: Basic Face Normalization** 
-**Priority**: MEDIUM | **Complexity**: MEDIUM | **Timeline**: Week 3-4
+## **Phase 3: Rotation Normalization Pipeline** 
+**Priority**: HIGH | **Complexity**: MEDIUM | **Timeline**: Week 3-4
 
 ### **Goal**
-Process more faces by normalizing orientation before lip-sync generation.
+Implement the core rotation normalization: rotate angled faces to frontal → MuseTalk → rotate back.
 
 ### **Tasks**
-- [ ] **3.1** Implement face rotation correction
-  - Detect face angle and rotate to frontal orientation
-  - Use OpenCV affine transformations
-- [ ] **3.2** Normalize face processing pipeline
-  - Rotate face → Generate mouth → Rotate back
-  - Maintain original perspective in final output
-- [ ] **3.3** Quality validation system
-  - Compare normalized vs. original processing
-  - Implement quality scoring for processed faces
-- [ ] **3.4** Fallback mechanism
-  - If normalization fails, use passthrough
-  - Ensure reliability over quality
+- [ ] **3.1** Implement rotation normalization functions
+  - Create `normalize_face_rotation()` - rotate face to frontal (0°)
+  - Create `restore_face_rotation()` - rotate result back to original angle
+  - Use precise landmark-based angle calculation from Phase 1
+- [ ] **3.2** Integrate normalization into preprocessing pipeline
+  - Detect face angle → normalize to frontal → resize to 256×256
+  - Store rotation matrix and original size for restoration
+  - Handle edge cases (already frontal faces, extreme angles)
+- [ ] **3.3** Implement angle restoration in blending
+  - Restore original angle after MuseTalk inference
+  - Resize back to original face crop dimensions
+  - Maintain face quality through transformations
+- [ ] **3.4** Add comprehensive testing and fallback
+  - Test on faces from 0° to ±45° angles
+  - Fallback to passthrough if normalization fails
+  - Compare quality: normalized vs. original vs. passthrough
 
 ### **Expected Outcomes**
-- More faces processed successfully
-- Better mouth alignment for moderately angled faces
-- Maintained reliability with fallback system
+- Angled faces (±45°) processed with frontal-quality lip sync
+- Dramatically improved mouth alignment for non-frontal faces
+- Robust fallback system maintains reliability
+- Clear quality improvement measurable on test videos
 
 ### **Files to Modify**
-- `musetalk/utils/preprocessing.py` - Add normalization functions
-- `musetalk/utils/blending.py` - Handle rotated face blending
-- `scripts/inference.py` - Integrate normalization pipeline
+- `musetalk/utils/preprocessing.py` - Add rotation normalization functions
+- `musetalk/utils/blending.py` - Add angle restoration to `get_image()`
+- `musetalk/utils/utils.py` - Update datagen to handle angle metadata
+- `scripts/inference.py` - Integrate full normalization pipeline
 
 ### **Success Criteria**
-- [ ] Successfully process faces at ±45° angles
-- [ ] Quality improvement measurable
-- [ ] Fallback system prevents crashes
-- [ ] Processing time increase <50%
+- [ ] Faces at ±45° angles processed successfully
+- [ ] Mouth alignment significantly improved (measurable)
+- [ ] No quality regression on frontal faces
+- [ ] Processing time increase <30%
+- [ ] Robust fallback prevents crashes
 
 ---
 
-## **Phase 4: Advanced Multi-Template Alignment** 
-**Priority**: LOW | **Complexity**: HIGH | **Timeline**: Week 5-8
+## **Phase 4: Advanced FaceFusion Integration** 
+**Priority**: MEDIUM | **Complexity**: HIGH | **Timeline**: Week 5-6
 
 ### **Goal**
-Implement FaceFusion-style warp templates for optimal face alignment.
+Integrate FaceFusion's advanced face alignment and blending techniques for extreme angles.
 
 ### **Tasks**
-- [ ] **4.1** Study FaceFusion warp templates
-  - Analyze different template types (arcface, ffhq, etc.)
-  - Understand template selection criteria
-- [ ] **4.2** Implement template-based face warping
-  - Add warp template system to preprocessing
-  - Use angle-appropriate templates
-- [ ] **4.3** Multi-angle face detection
-  - Implement rotated face detection (0°, 90°, 180°, 270°)
-  - Use best detection result for each frame
-- [ ] **4.4** Advanced landmark alignment
-  - Implement 5-point and 68-point landmark systems
-  - Use landmark-specific processing pipelines
+- [ ] **4.1** Implement FaceFusion warp templates
+  - Add FFHQ_512 and other warp templates from FaceFusion
+  - Implement `warp_face_by_face_landmark_5()` function
+  - Use 5-point landmarks for precise face alignment
+- [ ] **4.2** Advanced landmark processing
+  - Integrate FaceFusion's 68-point landmark detection
+  - Implement landmark quality scoring and selection
+  - Handle landmark-based angle estimation refinements
+- [ ] **4.3** FaceFusion-style blending system
+  - Implement `paste_back()` function with affine transformations
+  - Add advanced masking and feathering
+  - Integrate face parsing for better mouth region isolation
+- [ ] **4.4** Extreme angle handling (±90°)
+  - Extend rotation normalization to handle profile views
+  - Implement perspective correction for severe angles
+  - Add quality validation for extreme angle processing
 
 ### **Expected Outcomes**
-- Professional-grade face alignment
-- Processing capability for extreme angles
-- Significant quality improvement across all orientations
+- Process faces at extreme angles (up to ±90°)
+- Professional-grade blending quality matching FaceFusion
+- Significant quality improvement for all face orientations
+- Robust handling of challenging face poses
 
 ### **Files to Modify**
-- Create `musetalk/utils/face_alignment.py` - Template system
-- `musetalk/utils/preprocessing.py` - Multi-angle detection
-- `musetalk/models/` - Template-aware model loading
+- Create `musetalk/utils/face_alignment.py` - FaceFusion alignment functions
+- `musetalk/utils/blending.py` - Advanced blending with paste_back
+- `musetalk/utils/preprocessing.py` - Enhanced landmark processing
+- `musetalk/utils/face_parsing.py` - Extend for better mouth isolation
 
 ### **Success Criteria**
-- [ ] Process faces at any reasonable angle
-- [ ] Quality comparable to FaceFusion
-- [ ] Template system fully configurable
-- [ ] Comprehensive testing on diverse videos
+- [ ] Successfully process faces at ±90° angles
+- [ ] Blending quality matches FaceFusion standards
+- [ ] No artifacts in extreme angle scenarios
+- [ ] Processing time increase <50% vs Phase 3
 
 ---
 
-## **Phase 5: Model Fine-Tuning & Optimization** 
+## **Phase 5: Performance Optimization & Production Readiness** 
+**Priority**: MEDIUM | **Complexity**: MEDIUM | **Timeline**: Week 7-8
+
+### **Goal**
+Optimize the complete pipeline for production use with performance improvements.
+
+### **Tasks**
+- [ ] **5.1** Pipeline performance optimization
+  - Implement rotation matrix caching for common angles
+  - Batch processing for multiple faces in single frame
+  - GPU memory optimization for larger batch sizes
+- [ ] **5.2** Quality validation and metrics
+  - Implement automated quality scoring system
+  - Create comprehensive test suite with diverse face angles
+  - Benchmark against original MuseTalk on quality metrics
+- [ ] **5.3** Configuration and user experience
+  - Add comprehensive configuration system for all parameters
+  - Implement progressive fallback (normalization → filtering → passthrough)
+  - Create user-friendly quality/speed trade-off settings
+- [ ] **5.4** Production deployment features
+  - Add detailed logging and monitoring
+  - Implement error recovery and graceful degradation
+  - Create performance profiling and debugging tools
+
+### **Expected Outcomes**
+- Production-ready pipeline with optimized performance
+- Comprehensive quality validation and testing
+- User-friendly configuration and deployment
+- Robust error handling and monitoring
+
+### **Files to Modify**
+- `musetalk/utils/optimization.py` - Performance optimization functions
+- `configs/inference/` - Comprehensive configuration system
+- `scripts/benchmark.py` - Quality and performance testing
+- `scripts/inference.py` - Production-ready error handling
+
+### **Success Criteria**
+- [ ] Performance within 20% of original MuseTalk speed
+- [ ] Comprehensive quality improvement documented
+- [ ] Zero crashes on diverse test videos
+- [ ] Production deployment ready
+
+---
+
+## **Phase 6: Advanced Model Enhancement (Optional)** 
 **Priority**: LOW | **Complexity**: HIGH | **Timeline**: Week 9-12
 
 ### **Goal**
-Optimize models specifically for multi-angle face processing.
+Optional advanced enhancements for specialized use cases and maximum quality.
 
 ### **Tasks**
-- [ ] **5.1** Collect multi-angle training data
-  - Curate dataset with diverse face orientations
-  - Include angle labels and quality annotations
-- [ ] **5.2** Fine-tune UNet for angle awareness
-  - Train angle-conditioned lip-sync model
-  - Implement angle embeddings in model
-- [ ] **5.3** Advanced blending techniques
-  - Implement perspective-aware blending
-  - Use depth estimation for better integration
-- [ ] **5.4** Real-time optimization
-  - Optimize pipeline for real-time processing
-  - Implement model quantization and acceleration
+- [ ] **6.1** Angle-conditioned model training
+  - Collect multi-angle training dataset
+  - Train MuseTalk variant with angle embeddings
+  - Compare against rotation normalization approach
+- [ ] **6.2** 3D-aware face processing
+  - Implement pitch/yaw correction alongside roll
+  - Add depth estimation for perspective correction
+  - Handle extreme profile views (±90°+ angles)
+- [ ] **6.3** Real-time processing optimization
+  - Model quantization and pruning
+  - TensorRT/ONNX optimization
+  - Multi-GPU scaling for batch processing
+- [ ] **6.4** Advanced quality metrics
+  - Implement perceptual quality scoring
+  - Add temporal consistency validation
+  - Create benchmark against commercial solutions
 
 ### **Expected Outcomes**
-- Custom models optimized for multi-angle processing
+- State-of-the-art quality for all face orientations
 - Real-time processing capability
-- State-of-the-art quality results
+- Research-grade evaluation and benchmarking
+- Optional deployment for maximum quality scenarios
 
 ### **Files to Modify**
-- `train.py` - Add angle-aware training
-- `musetalk/models/unet.py` - Angle conditioning
-- Create `musetalk/utils/advanced_blending.py`
+- `train.py` - Angle-conditioned training pipeline
+- `musetalk/models/unet.py` - Enhanced model architecture
+- `musetalk/utils/advanced_processing.py` - 3D-aware processing
+- `scripts/benchmark_advanced.py` - Research-grade evaluation
 
 ### **Success Criteria**
-- [ ] Custom models outperform base MuseTalk
-- [ ] Real-time processing achieved
-- [ ] Comprehensive evaluation on benchmark datasets
+- [ ] Custom models outperform rotation normalization
+- [ ] Real-time processing on high-end hardware
+- [ ] Published benchmark results
+- [ ] Research paper quality evaluation
 
 ---
 
@@ -248,35 +320,41 @@ Optimize models specifically for multi-angle face processing.
 
 ## **Progress Tracking**
 
-### **Phase 1 Status**: ⏳ Not Started
-- [ ] Angle detection implemented
-- [ ] Diagnostic tools created
-- [ ] Test video analysis complete
-- [ ] Findings documented
+### **Phase 1 Status**: ✅ **COMPLETE** 🎉
+- [x] Angle detection implemented
+- [x] Diagnostic tools created  
+- [x] Test video analysis complete
+- [x] Findings documented
 
 ### **Phase 2 Status**: ⏳ Not Started  
-- [ ] Filtering system implemented
-- [ ] Quality improvement measured
-- [ ] Configuration system working
-- [ ] Documentation updated
+- [ ] FaceFusion face detection integrated
+- [ ] Multi-angle detection working
+- [ ] Quality scoring system operational
+- [ ] Performance validated
 
 ### **Phase 3 Status**: ⏳ Not Started
-- [ ] Normalization pipeline working
-- [ ] Quality validation complete
-- [ ] Performance benchmarks met
-- [ ] Integration testing passed
+- [ ] Rotation normalization functions implemented
+- [ ] Pipeline integration complete
+- [ ] Angle restoration in blending working
+- [ ] Quality improvement measured
 
 ### **Phase 4 Status**: ⏳ Not Started
-- [ ] Template system implemented
-- [ ] Multi-angle detection working
-- [ ] Advanced alignment complete
-- [ ] Comprehensive testing done
+- [ ] FaceFusion warp templates integrated
+- [ ] Advanced blending system implemented
+- [ ] Extreme angle handling working
+- [ ] Professional-grade quality achieved
 
 ### **Phase 5 Status**: ⏳ Not Started
-- [ ] Training pipeline established
-- [ ] Models fine-tuned
-- [ ] Optimization complete
-- [ ] Final evaluation done
+- [ ] Performance optimization complete
+- [ ] Quality validation system working
+- [ ] Configuration system implemented
+- [ ] Production deployment ready
+
+### **Phase 6 Status**: ⏳ Optional
+- [ ] Advanced model training evaluated
+- [ ] 3D-aware processing implemented
+- [ ] Real-time optimization complete
+- [ ] Research-grade benchmarking done
 
 ---
 
@@ -292,10 +370,15 @@ Optimize models specifically for multi-angle face processing.
 - **Date**: [To be filled] 
 - **Impact**: Faster implementation, lower risk
 
-### **Decision 3**: Implement FaceFusion-style hybrid filtering
-- **Rationale**: Quality scores + angle limits better than angle-only filtering
+### **Decision 3**: Prioritize rotation normalization over filtering-only approach
+- **Rationale**: Rotation normalization processes more faces with better quality than filtering alone
 - **Date**: [Current]
-- **Impact**: Higher processing coverage while maintaining quality
+- **Impact**: Dramatically improved coverage and quality for angled faces
+
+### **Decision 4**: Implement FaceFusion detection models in Phase 2
+- **Rationale**: Better angle detection foundation essential for rotation normalization
+- **Date**: [Current]
+- **Impact**: Improved face detection accuracy enables better normalization results
 
 ---
 
@@ -325,13 +408,33 @@ Optimize models specifically for multi-angle face processing.
 
 ## **Implementation Notes**
 
-### **FaceFusion Integration Approach**
-- **Phase 1**: Use FaceFusion's exact `estimate_face_angle()` logic
-- **Phase 2**: Implement FaceFusion's quality scoring system alongside angle filtering
-- **Phase 3+**: Gradually adopt more FaceFusion techniques (warp templates, multi-angle detection)
+### **Rotation Normalization Implementation Strategy**
+- **Phase 1**: ✅ **COMPLETE** - FaceFusion's `estimate_face_angle()` logic implemented
+- **Phase 2**: Integrate FaceFusion's multi-angle face detection and quality scoring
+- **Phase 3**: **CORE** - Implement rotation normalization pipeline (rotate → MuseTalk → rotate back)
+- **Phase 4**: Advanced FaceFusion integration (warp templates, advanced blending)
+- **Phase 5**: Production optimization and deployment readiness
+- **Phase 6**: Optional advanced model enhancements
 
-### **Dependencies Added**
+### **Key Dependencies for FaceFusion Integration**
 - `onnx>=1.17.0` - For FaceFusion model compatibility
-- `onnxruntime>=1.22.0` - For FaceFusion inference engines
+- `onnxruntime>=1.22.0` - For FaceFusion inference engines  
 - `scipy>=1.15.0` - For advanced mathematical operations
 - `psutil>=7.0.0` - For system monitoring and optimization
+- `opencv-python>=4.8.0` - For advanced rotation and affine transformations
+
+### **Critical Implementation Functions to Create**
+```python
+# Phase 2: Enhanced Detection
+def integrate_facefusion_detection(frame) -> (bbox, landmarks, angle, quality)
+def select_best_multi_angle_detection(detections) -> best_detection
+
+# Phase 3: Core Rotation Normalization  
+def normalize_face_rotation(face_crop, angle) -> (normalized_face, rotation_matrix)
+def restore_face_rotation(processed_face, rotation_matrix) -> restored_face
+def enhanced_musetalk_pipeline(frame, audio, models) -> result_frame
+
+# Phase 4: Advanced Integration
+def warp_face_by_face_landmark_5(frame, landmarks, template) -> (warped, matrix)
+def paste_back_with_affine(frame, face, mask, matrix) -> blended_frame
+```

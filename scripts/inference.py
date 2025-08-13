@@ -19,7 +19,7 @@ from musetalk.utils.face_parsing import FaceParsing
 from musetalk.utils.audio_processor import AudioProcessor
 from musetalk.utils.utils import get_file_type, get_video_fps, datagen, datagen_enhanced, load_all_model
 
-from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder
+from musetalk.utils.preprocessing import get_landmark_and_bbox, get_landmark_and_bbox_enhanced, read_imgs, coord_placeholder
 
 def fast_check_ffmpeg():
     try:
@@ -156,7 +156,7 @@ def main(args):
                 frame_list = read_imgs(input_img_list)
             else:
                 print("Extracting landmarks... time-consuming operation")
-                coord_list, frame_list = get_landmark_and_bbox(input_img_list, bbox_shift)
+                coord_list, frame_list, passthrough_frames = get_landmark_and_bbox_enhanced(input_img_list, bbox_shift)
                 with open(crop_coord_save_path, 'wb') as f:
                     pickle.dump(coord_list, f)
             
