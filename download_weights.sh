@@ -4,7 +4,7 @@
 CheckpointsDir="models"
 
 # Create necessary directories
-mkdir -p models/musetalk models/musetalkV15 models/syncnet models/latentsync models/dwpose models/face-parse-bisent models/sd-vae models/whisper
+mkdir -p models/musetalk models/musetalkV15 models/syncnet models/dwpose models/face-parse-bisent models/sd-vae models/whisper
 
 # Install required packages
 pip install -U "huggingface_hub[cli]"
@@ -43,10 +43,7 @@ huggingface-cli download ByteDance/LatentSync \
   --local-dir $CheckpointsDir/syncnet \
   --include "latentsync_syncnet.pt"
 
-# Download LatentSync UNet3D weights (for surgical integration)
-huggingface-cli download ByteDance/LatentSync-1.6 \
-  --local-dir $CheckpointsDir/latentsync \
-  --include "latentsync_unet.pt"
+
 
 # Download Face Parse Bisent weights
 gdown --id 154JgKpzCPW82qINcVieuPH3fZ2e0P812 -O $CheckpointsDir/face-parse-bisent/79999_iter.pth

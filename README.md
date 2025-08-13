@@ -1,62 +1,27 @@
-# BraivTalk - Surgical Integration with LatentSync
+# BraivTalk - Enhanced MuseTalk with Cutaway Handling
 
-<strong>Advanced Audio-Driven Lip-Sync with Cutaway Handling and Optional LatentSync Integration</strong>
+<strong>Advanced Audio-Driven Lip-Sync with Robust Frame Processing</strong>
 
-A surgically enhanced version of MuseTalk that provides **robust cutaway handling** and **optional LatentSync UNet3D integration** for higher quality lip-sync generation, while maintaining 100% backward compatibility with the original MuseTalk pipeline.
+An enhanced version of MuseTalk that provides **robust cutaway handling** and **optimized GPU performance** for reliable lip-sync generation in real-world video scenarios.
 
-## 🎯 **What This Repository Does**
+## 🎯 **Project Goals**
 
-This project enhances the original MuseTalk with:
+BraivTalk addresses critical limitations in the original MuseTalk by focusing on:
 
-1. **🔄 Cutaway Frame Handling** - Never freezes on scenes without faces (restaurants, landscapes, cutaways)
-2. **🧠 Surgical LatentSync Integration** - Optional higher-quality UNet3D models with automatic fallback
-3. **⚡ GPU Optimization** - Enhanced batch processing for better GPU utilization
-4. **🎬 Robust Video Output** - Fixed audio integration and proper FFmpeg handling
-5. **🛡️ Production Ready** - Comprehensive error handling and logging
-
-### **Core Problem Solved**
-> *"The original MuseTalk would freeze when encountering cutaway scenes (frames without faces). Our solution processes face-containing frames with lip-sync and passes through cutaway frames unchanged, maintaining perfect video continuity."*
-
----
-
-## 🏗️ **Architecture Overview**
-
-Our **surgical integration** strategy replaces only the UNet inference step while keeping MuseTalk's robust preprocessing, audio handling, and frame management:
-
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   MuseTalk      │    │   Surgical       │    │   MuseTalk      │
-│   Preprocessing │───▶│   UNet3D         │───▶│   Postprocessing│
-│   (Face Detect) │    │   (LatentSync)   │    │   (Video Output)│
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                              │
-                              ▼
-                       ┌──────────────────┐
-                       │   Fallback       │
-                       │   MuseTalk UNet  │
-                       └──────────────────┘
-```
-
-### **📊 Detailed Architecture Diagrams**
-
-Explore our comprehensive architecture documentation:
-
-- **[Pipeline Flow](diagrams/01_surgical_pipeline_flow.mmd)** - Complete processing pipeline
-- **[Dependency Tree](diagrams/02_dependency_tree.mmd)** - Resolved dependency conflicts  
-- **[Code Structure](diagrams/03_code_structure.mmd)** - File organization and relationships
-- **[Convert to PNG](diagrams/convert_to_png.py)** - Diagram conversion utilities
-
-*See [diagrams/README.md](diagrams/README.md) for viewing and conversion instructions.*
-
----
+- **🎬 Cutaway Handling**: Seamlessly processes videos with face transitions, cutaways, and non-face frames
+- **🔄 Frame Continuity**: Prevents video freezing when faces disappear from frame
+- **⚡ GPU Optimization**: Configurable batch processing for efficient hardware utilization
+- **🛡️ Reliability**: Robust preprocessing and error handling for production use
+- **🎵 Audio Sync**: Perfect audio-visual synchronization throughout entire videos
 
 ## 🚀 **Quick Start**
 
 ### **Prerequisites**
+
 - Python 3.10+
 - CUDA-capable GPU (recommended)
-- 16GB+ RAM (32GB recommended)
 - FFmpeg installed
+- Git LFS (for model downloads)
 
 ### **1. Clone and Setup**
 
@@ -68,27 +33,23 @@ cd braivtalk
 conda create -n braivtalk python=3.10
 conda activate braivtalk
 
-# Install dependencies
+# Install core dependencies
 pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118
 pip install diffusers==0.32.2 transformers==4.48.0 numpy==1.26.4
 pip install librosa soundfile opencv-python gradio huggingface_hub
-pip install einops omegaconf ffmpeg-python imageio gdown requests
+pip install omegaconf tqdm yacs av accelerate
 ```
 
 ### **2. Download Models**
 
 ```bash
 # Windows
-download_weights.bat
+./download_weights.bat
 
 # Linux/Mac
+chmod +x download_weights.sh
 ./download_weights.sh
 ```
-
-This downloads:
-- ✅ **MuseTalk models** (core functionality)
-- ✅ **LatentSync UNet3D** (optional higher quality)
-- ✅ **Whisper, VAE, DWPose** (supporting models)
 
 ### **3. Quick Test**
 
@@ -98,7 +59,8 @@ python -m scripts.inference \
   --result_dir results/test \
   --unet_model_path models/musetalkV15/unet.pth \
   --unet_config models/musetalkV15/musetalk.json \
-  --version v15
+  --version v15 \
+  --ffmpeg_path ffmpeg-master-latest-win64-gpl-shared/bin
 ```
 
 ### **4. Gradio Web Interface**
@@ -107,81 +69,68 @@ python -m scripts.inference \
 python app.py
 ```
 
-Open `http://localhost:7860` for the web interface.
+Access the web interface at `http://localhost:7860`
 
----
+## 🔧 **Key Enhancements**
 
-## 📋 **Development Status**
+### **Enhanced Frame Processing**
+- **Cutaway Detection**: Automatically identifies frames without faces
+- **Frame Passthrough**: Original frames are preserved for non-face segments
+- **Continuous Processing**: Video never freezes or gets stuck on missing faces
+- **Smart Batching**: Processes face frames efficiently while bypassing others
 
-### ✅ **Completed Features**
+### **Optimized Performance**
+- **Configurable Batch Sizes**: Adjustable for different GPU capabilities
+- **Memory Management**: Conservative settings prevent system crashes
+- **GPU Acceleration**: Maximizes CUDA utilization where possible
+- **FP16 Support**: Optional mixed precision for memory efficiency
 
-| Feature | Status | Description |
-|---------|--------|-------------|
-| **Cutaway Handling** | ✅ **DONE** | Perfect frame bypassing for scenes without faces |
-| **Enhanced Face Detection** | ✅ **DONE** | Robust S3FD-based detection with fallbacks |
-| **Audio Integration Fix** | ✅ **DONE** | Proper FFmpeg audio/video merging |
-| **Surgical UNet Integration** | ✅ **DONE** | Optional LatentSync UNet3D with fallback |
-| **GPU Optimization** | ✅ **DONE** | Configurable batch sizes for better GPU usage |
-| **Error Handling** | ✅ **DONE** | Comprehensive logging and graceful failures |
-| **Dependency Resolution** | ✅ **DONE** | Conflict-free requirements with surgical elimination |
-| **Setup Automation** | ✅ **DONE** | Cross-platform setup scripts |
-| **Architecture Documentation** | ✅ **DONE** | Complete diagrams and technical specs |
+### **Robust Pipeline**
+- **Error Handling**: Graceful fallbacks for edge cases
+- **Path Normalization**: Cross-platform file handling
+- **Dependency Management**: Optional components for flexibility
+- **Audio Synchronization**: Reliable FFmpeg integration
 
-### 🔄 **In Progress**
-
-| Feature | Status | Priority | Notes |
-|---------|--------|----------|-------|
-| **LatentSync Model Loading** | 🔄 **ACTIVE** | HIGH | Currently falls back to MuseTalk (works perfectly) |
-| **Advanced Scene Detection** | 🔄 **PLANNED** | MEDIUM | Enhanced cutaway detection algorithms |
-
-### 📝 **Planned Features**
-
-| Feature | Priority | Description |
-|---------|----------|-------------|
-| **Real-time Streaming** | HIGH | Live video stream processing |
-| **Multi-face Support** | MEDIUM | Handle multiple speakers in one frame |
-| **Custom Model Training** | LOW | Train on custom datasets |
-| **API Endpoints** | MEDIUM | REST API for integration |
-| **Docker Container** | LOW | Containerized deployment |
-
----
-
-## 🛠️ **For Developers**
-
-### **Project Structure**
+## 📁 **Project Structure**
 
 ```
 braivtalk/
 ├── scripts/
 │   ├── inference.py              # Main inference with cutaway handling
-│   ├── hybrid_inference.py       # Surgical LatentSync integration
-│   └── preprocess.py             # Enhanced preprocessing
+│   ├── preprocess.py             # Enhanced preprocessing
+│   └── realtime_inference.py     # Real-time processing
 ├── musetalk/
-│   └── utils/
-│       ├── preprocessing.py      # Face detection & landmarks
-│       └── utils.py              # Enhanced data generators
+│   ├── models/                   # Core MuseTalk models (VAE, UNet)
+│   ├── utils/
+│   │   ├── preprocessing.py      # Enhanced face detection & landmarks
+│   │   ├── utils.py              # Data generation with passthrough support
+│   │   └── blending.py           # Image composition
+│   └── whisper/                  # Audio feature extraction
 ├── configs/
-│   └── inference/
-│       └── test.yaml             # Inference configuration
-├── diagrams/                     # Architecture documentation
-├── download_weights.{bat,sh}     # Model download scripts
-└── app.py                        # Gradio web interface
+│   └── inference/                # Configuration files
+├── data/
+│   ├── video/                    # Input videos
+│   └── audio/                    # Input audio files
+├── models/                       # Downloaded model weights
+└── results/                      # Generated outputs
 ```
 
-### **Key Files Modified**
+## 🛠️ **For Developers**
 
-| File | Changes | Purpose |
-|------|---------|---------|
-| `scripts/inference.py` | Enhanced frame processing, surgical UNet calls | Main inference logic |
-| `musetalk/utils/preprocessing.py` | Face detection with passthrough frames | Cutaway handling |
-| `musetalk/utils/utils.py` | Enhanced data generators | Mixed batch processing |
-| `scripts/hybrid_inference.py` | **NEW** - Surgical integration manager | LatentSync UNet3D integration |
+### **Key File Modifications**
+
+| File | Enhancement | Purpose |
+|------|-------------|---------|
+| `musetalk/utils/preprocessing.py` | Face detection optimization | Handles cutaway frames gracefully |
+| `musetalk/utils/utils.py` | Enhanced data generation | Supports both processing and passthrough |
+| `scripts/inference.py` | Cutaway handling logic | Main inference with frame continuity |
+| `app.py` | Web interface updates | Gradio interface with enhanced pipeline |
 
 ### **Development Setup**
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/braivtalk.git
+git clone https://github.com/benraduk/braivtalk.git
 cd braivtalk
 
 # Create development environment
@@ -193,143 +142,103 @@ pip install torch torchvision torchaudio --extra-index-url https://download.pyto
 # ... (rest of dependencies)
 
 # Download models
-./download_weights.sh  # or .bat on Windows
+./download_weights.bat  # or .sh for Linux/Mac
 ```
 
-### **Adding New Features**
+### **Testing**
 
-1. **Face Detection**: Modify `musetalk/utils/preprocessing.py`
-2. **Model Integration**: Extend `scripts/hybrid_inference.py`  
-3. **UI Changes**: Update `app.py`
-4. **New Models**: Add to `download_weights.{bat,sh}`
+```bash
+# Quick dependency check
+python -c "import torch; print('PyTorch:', torch.__version__, 'CUDA:', torch.cuda.is_available())"
+python -c "import diffusers; print('Diffusers:', diffusers.__version__)"
 
----
-
-## 📚 **Configuration**
-
-### **Inference Configuration**
-
-Edit `configs/inference/test.yaml`:
-
-```yaml
-video_path: "data/video/your_video.mp4"
-audio_path: "data/audio/your_audio.wav"
-bbox_shift: 0  # Adjust face region (critical parameter)
+# Test inference pipeline
+python -m scripts.inference --inference_config configs/inference/test.yaml --result_dir results/dev_test --unet_model_path models/musetalkV15/unet.pth --unet_config models/musetalkV15/musetalk.json --version v15
 ```
 
-### **Performance Tuning**
+## ⚙️ **Performance Tuning**
 
-Key parameters in inference scripts:
+### **Batch Size Configuration**
+
+Adjust batch sizes based on your GPU memory:
 
 ```python
-# Batch sizes (adjust based on GPU memory)
-batch_size = 12        # Main inference batches
-batch_size_fa = 1      # Face detection (keep at 1 for stability)
-use_float16 = True     # Enable FP16 for memory efficiency
+# Conservative (4GB+ GPU)
+batch_size = 4
+batch_size_fa = 1
+
+# Moderate (8GB+ GPU) 
+batch_size = 12
+batch_size_fa = 1
+
+# Aggressive (16GB+ GPU)
+batch_size = 24
+batch_size_fa = 2
 ```
 
-### **Model Paths**
+### **Memory Optimization**
 
-The system automatically searches for models in:
-1. `models/latentsync/` (LatentSync UNet3D)
-2. `models/musetalkV15/` (MuseTalk fallback)
-3. `models/whisper/` (Audio processing)
+- Use FP16 precision: `--fp16` flag
+- Reduce batch sizes if experiencing OOM errors
+- Close other GPU applications during processing
+- Monitor GPU memory usage with `nvidia-smi`
 
----
+## 🎬 **Development Status**
+
+### **✅ Completed Features**
+- [x] Cutaway frame detection and handling
+- [x] Enhanced preprocessing with face detection
+- [x] Passthrough frame processing
+- [x] GPU batch optimization
+- [x] FFmpeg integration fixes
+- [x] Cross-platform compatibility
+- [x] Gradio web interface
+- [x] Comprehensive error handling
+
+### **🚧 In Progress**
+- [ ] Real-time processing optimization
+- [ ] Advanced face detection models
+- [ ] Multi-speaker support
+
+### **📋 Planned Features**
+- [ ] Video quality enhancement
+- [ ] Advanced audio processing
+- [ ] Batch video processing
+- [ ] API endpoints
+- [ ] Docker containerization
+- [ ] Model fine-tuning tools
 
 ## 🐛 **Troubleshooting**
 
 ### **Common Issues**
 
-| Issue | Solution |
-|-------|----------|
-| **"No face detected"** | Adjust `bbox_shift` parameter in config |
-| **GPU out of memory** | Reduce `batch_size` from 12 to 4 or 1 |
-| **Audio missing from output** | Check FFmpeg installation |
-| **Process hangs at preprocessing** | Set `batch_size_fa=1` (default) |
-| **LatentSync import fails** | Install `pip install matplotlib` or use fallback mode |
+**Video freezes during cutaways**
+- ✅ Fixed: Enhanced frame processing handles this automatically
 
-### **Debug Mode**
+**Out of memory errors**
+- Reduce `batch_size` in inference scripts
+- Use `batch_size_fa=1` for face detection
+- Close other GPU applications
 
-Enable detailed logging:
+**FFmpeg not found**
+- Install FFmpeg and add to PATH
+- Use `--ffmpeg_path` argument to specify location
 
-```python
-# In scripts/inference.py
-import logging
-logging.basicConfig(level=logging.DEBUG)
-```
+**Audio sync issues**
+- ✅ Fixed: Improved FFmpeg command handling
+- Ensure input audio and video have matching durations
 
-### **Verification**
+## 📚 **Documentation**
 
-Test your setup:
-
-   ```bash
-# Quick dependency check
-python -c "import torch; print('PyTorch:', torch.__version__, 'CUDA:', torch.cuda.is_available())"
-
-# Test inference pipeline
-python -m scripts.inference --inference_config configs/inference/test.yaml --result_dir results/debug
-```
-
----
-
-## 🤝 **Contributing**
-
-### **Development Workflow**
-
-1. **Fork** the repository
-2. **Create feature branch**: `git checkout -b feature/your-feature`
-3. **Make changes** following our architecture patterns
-4. **Test thoroughly** with various video inputs
-5. **Update documentation** if needed
-6. **Submit pull request**
-
-### **Code Standards**
-
-- **Follow existing patterns** in `scripts/hybrid_inference.py`
-- **Add comprehensive logging** for debugging
-- **Handle errors gracefully** with fallbacks
-- **Update diagrams** for architectural changes
-- **Test with cutaway videos** to ensure robustness
-
-### **Reporting Issues**
-
-Please include:
-- Video/audio input specifications  
-- Full error logs with stack traces
-- System specifications (GPU, RAM, OS)
-- Configuration files used
-
----
-
-## 📊 **Performance**
-
-### **Benchmarks**
-
-| Metric | Original MuseTalk | Enhanced Version |
-|--------|-------------------|------------------|
-| **Cutaway Handling** | ❌ Freezes | ✅ Perfect continuity |
-| **GPU Utilization** | ~23% | ~60-80% (configurable) |
-| **Memory Usage** | High CPU usage | Optimized GPU processing |
-| **Error Recovery** | Crash on no-face | Graceful fallback |
-| **Audio Sync** | Occasional issues | Robust FFmpeg integration |
-
-### **System Requirements**
-
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| **GPU** | GTX 1060 6GB | RTX 4080+ |
-| **RAM** | 16GB | 32GB |
-| **Storage** | 10GB | 50GB (with all models) |
-| **CPU** | 8 cores | 16+ cores |
-
----
+- **[Dependency Tree](diagrams/02_dependency_tree.mmd)** - Project dependencies
+- **[Code Structure](diagrams/03_code_structure.mmd)** - Architecture overview
+- **[Diagrams](diagrams/)** - Technical documentation
 
 ## 📄 **License**
 
-This project builds upon MuseTalk (Apache 2.0) and incorporates concepts from LatentSync. See [LICENSE](LICENSE) for details.
+This project builds upon MuseTalk and maintains compatibility with its licensing terms.
 
-### **Citations**
+## 🙏 **Citations**
 
 ```bibtex
 @article{zhang2024musetalk,
@@ -340,16 +249,13 @@ This project builds upon MuseTalk (Apache 2.0) and incorporates concepts from La
 }
 ```
 
----
-
 ## 🔗 **Links**
 
-- **[Original MuseTalk](https://github.com/TMElyralab/MuseTalk)** - Base implementation
-- **[LatentSync](https://github.com/bytedance/LatentSync)** - Higher quality models
+- **[Original MuseTalk](https://github.com/TMElyralab/MuseTalk)** - Base repository
+- **[Gradio](https://gradio.app/)** - Web interface framework
 - **[Architecture Diagrams](diagrams/)** - Detailed technical documentation
-- **[Setup Scripts](setup_surgical.bat)** - Automated environment setup
 
 ---
 
-*BraivTalk - Surgical Integration v2.0.0*  
+*BraivTalk - Enhanced MuseTalk v2.0.0*  
 *Last updated: January 2025*

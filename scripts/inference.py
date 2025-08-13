@@ -18,7 +18,7 @@ from musetalk.utils.blending import get_image
 from musetalk.utils.face_parsing import FaceParsing
 from musetalk.utils.audio_processor import AudioProcessor
 from musetalk.utils.utils import get_file_type, get_video_fps, datagen, datagen_enhanced, load_all_model
-from scripts.hybrid_inference import surgical_unet3d_inference
+
 from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder
 
 def fast_check_ffmpeg():
@@ -223,8 +223,8 @@ def main(args):
                     audio_feature_batch = pe(whisper_batch)
                     latent_batch = latent_batch.to(dtype=unet.model.dtype)
                     
-                    # 🔄 SURGICAL REPLACEMENT: LatentSync UNet3D with MuseTalk fallback
-                    pred_latents = surgical_unet3d_inference(latent_batch, audio_feature_batch, timesteps, unet.model)
+                    # UNet inference for lip-sync generation
+                    pred_latents = unet.model(latent_batch, timesteps, encoder_hidden_states=audio_feature_batch).sample
                     recon = vae.decode_latents(pred_latents)
                     
                     # Process results according to batch types

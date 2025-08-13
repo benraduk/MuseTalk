@@ -8,7 +8,7 @@ set CheckpointsDir=models
 mkdir %CheckpointsDir%\musetalk
 mkdir %CheckpointsDir%\musetalkV15
 mkdir %CheckpointsDir%\syncnet
-mkdir %CheckpointsDir%\latentsync
+
 mkdir %CheckpointsDir%\dwpose
 mkdir %CheckpointsDir%\face-parse-bisent
 mkdir %CheckpointsDir%\sd-vae-ft-mse
@@ -36,8 +36,7 @@ huggingface-cli download yzd-v/DWPose --local-dir %CheckpointsDir%\dwpose --incl
 :: Download SyncNet weights
 huggingface-cli download ByteDance/LatentSync --local-dir %CheckpointsDir%\syncnet --include "latentsync_syncnet.pt"
 
-:: Download LatentSync UNet3D weights (for surgical integration)
-huggingface-cli download ByteDance/LatentSync-1.6 latentsync_unet.pt --local-dir %CheckpointsDir%\latentsync
+
 
 :: Download Face Parse Bisent weights (using gdown)
 gdown --id 154JgKpzCPW82qINcVieuPH3fZ2e0P812 -O %CheckpointsDir%\face-parse-bisent\79999_iter.pth

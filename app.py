@@ -99,8 +99,7 @@ def debug_inpainting(video_path, bbox_shift, extra_margin=10, parsing_mode="jaw"
     latents = latents.to(dtype=weight_dtype)
     
     # Generate prediction results
-    # 🔄 SURGICAL REPLACEMENT: LatentSync UNet3D with MuseTalk fallback
-    pred_latents = surgical_unet3d_inference(latents, audio_feature, timesteps, unet.model)
+    pred_latents = unet.model(latents, timesteps, encoder_hidden_states=audio_feature).sample
     recon = vae.decode_latents(pred_latents)
     
     # Inpaint back to original image
@@ -170,7 +169,7 @@ from musetalk.utils.blending import get_image
 from musetalk.utils.face_parsing import FaceParsing
 from musetalk.utils.audio_processor import AudioProcessor
 from musetalk.utils.utils import get_file_type, get_video_fps, datagen, datagen_enhanced, load_all_model
-from scripts.hybrid_inference import surgical_unet3d_inference
+
 from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder, get_bbox_range
 
 
@@ -334,8 +333,8 @@ def inference(audio_path, video_path, bbox_shift, extra_margin=10, parsing_mode=
             audio_feature_batch = pe(whisper_batch)
             latent_batch = latent_batch.to(dtype=weight_dtype)
             
-            # 🔄 SURGICAL REPLACEMENT: LatentSync UNet3D with MuseTalk fallback
-            pred_latents = surgical_unet3d_inference(latent_batch, audio_feature_batch, timesteps, unet.model)
+            # UNet inference for lip-sync generation
+            pred_latents = unet.model(latent_batch, timesteps, encoder_hidden_states=audio_feature_batch).sample
             recon = vae.decode_latents(pred_latents)
             
             # Process results according to batch types
