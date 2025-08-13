@@ -38,6 +38,15 @@ pip install torch torchvision torchaudio --extra-index-url https://download.pyto
 pip install diffusers==0.32.2 transformers==4.48.0 numpy==1.26.4
 pip install librosa soundfile opencv-python gradio huggingface_hub
 pip install omegaconf tqdm yacs av accelerate
+
+# Install CUDA runtime and cuDNN for FaceFusion-style GPU acceleration
+conda install nvidia/label/cuda-12.9.1::cuda-runtime nvidia/label/cudnn-9.10.0::cudnn
+
+# Install TensorRT for optimal ONNX GPU performance
+pip install tensorrt==10.12.0.36 --extra-index-url https://pypi.nvidia.com
+
+# Install remaining dependencies (includes onnxruntime-gpu)
+pip install -r requirements.txt
 ```
 
 ### **2. Download Models**
@@ -139,7 +148,9 @@ conda activate braivtalk-dev
 
 # Install dependencies (see Quick Start section)
 pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118
-# ... (rest of dependencies)
+conda install nvidia/label/cuda-12.9.1::cuda-runtime nvidia/label/cudnn-9.10.0::cudnn
+pip install tensorrt==10.12.0.36 --extra-index-url https://pypi.nvidia.com
+pip install -r requirements.txt
 
 # Download models
 ./download_weights.bat  # or .sh for Linux/Mac
@@ -151,6 +162,7 @@ pip install torch torchvision torchaudio --extra-index-url https://download.pyto
 # Quick dependency check
 python -c "import torch; print('PyTorch:', torch.__version__, 'CUDA:', torch.cuda.is_available())"
 python -c "import diffusers; print('Diffusers:', diffusers.__version__)"
+python -c "import onnxruntime; print('ONNX Runtime:', onnxruntime.__version__, 'Providers:', onnxruntime.get_available_providers())"
 
 # Test inference pipeline
 python -m scripts.inference --inference_config configs/inference/test.yaml --result_dir results/dev_test --unet_model_path models/musetalkV15/unet.pth --unet_config models/musetalkV15/musetalk.json --version v15
@@ -223,6 +235,11 @@ batch_size_fa = 2
 **FFmpeg not found**
 - Install FFmpeg and add to PATH
 - Use `--ffmpeg_path` argument to specify location
+
+**ONNX Runtime GPU issues**
+- Verify CUDA installation: `nvidia-smi`
+- Check ONNX providers: `python -c "import onnxruntime; print(onnxruntime.get_available_providers())"`
+- Fallback to CPU: `pip uninstall onnxruntime-gpu && pip install onnxruntime`
 
 **Audio sync issues**
 - ✅ Fixed: Improved FFmpeg command handling
