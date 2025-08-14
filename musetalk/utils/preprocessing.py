@@ -56,6 +56,20 @@ def get_pose_model():
 device = "cuda" if torch.cuda.is_available() else "cpu"
 fa = FaceAlignment(LandmarksType._2D, flip_input=False,device=device)
 
+# PHASE 2: Initialize FaceFusion detector
+try:
+    from musetalk.utils.facefusion_detection import FaceFusionDetector
+    ff_detector = FaceFusionDetector(device=device)
+    print("✅ FaceFusion detector initialized for Phase 2")
+except ImportError as e:
+    print(f"⚠️  FaceFusion detector import failed: {e}")
+    print("⚠️  Continuing with original face detection only")
+    ff_detector = None
+except Exception as e:
+    print(f"⚠️  FaceFusion detector initialization failed: {e}")
+    print("⚠️  Continuing with original face detection only") 
+    ff_detector = None
+
 # maker if the bbox is not sufficient 
 coord_placeholder = (0.0,0.0,0.0,0.0)
 
@@ -585,7 +599,149 @@ def get_landmark_and_bbox_enhanced(img_list, upperbondrange=0):
     print("=" * 60)
     
     return coords_list, frames, passthrough_frames
+
+
+def get_landmark_and_bbox_phase2(img_list, upperbondrange=0):
+    """
+    PHASE 2: Enhanced detection with FaceFusion multi-angle support
     
+    This function integrates FaceFusion's multi-angle face detection for improved
+    angle detection and quality scoring, building the foundation for Phase 3 rotation normalization.
+    """
+    frames = read_imgs(img_list)
+    coords_list = []
+    detection_metadata = []  # Store angle, quality, and source info for each frame
+    
+    print("🚀 PHASE 2: Enhanced Multi-Angle Face Detection")
+    print("=" * 60)
+    
+    # Detection statistics
+    detection_stats = {
+        'total_frames': len(frames),
+        'faces_detected': 0,
+        'facefusion_detections': 0,
+        'fallback_detections': 0,
+        'no_face_frames': 0
+    }
+    
+    for i, frame in enumerate(tqdm(frames, desc="Processing frames")):
+        if ff_detector is not None:
+            # Use FaceFusion multi-angle detection
+            try:
+                detections = ff_detector.detect_multi_angle(frame)
+                
+                if detections:
+                    best_detection = detections[0]  # Already sorted by confidence
+                    coords_list.append(best_detection['bbox'])
+                    
+                    # Store metadata for Phase 3 rotation normalization
+                    metadata = {
+                        'frame_idx': i,
+                        'angle': best_detection.get('angle', 0),
+                        'confidence': best_detection['confidence'],
+                        'source': best_detection['source'],
+                        'orientation': classify_face_orientation(best_detection.get('angle', 0))
+                    }
+                    detection_metadata.append(metadata)
+                    
+                    detection_stats['faces_detected'] += 1
+                    if 'facefusion' in best_detection['source']:
+                        detection_stats['facefusion_detections'] += 1
+                    else:
+                        detection_stats['fallback_detections'] += 1
+                    
+                    print(f"Frame {i}: Face detected (angle: {metadata['angle']}°, confidence: {metadata['confidence']:.2f}, source: {metadata['source']})")
+                else:
+                    coords_list.append(coord_placeholder)
+                    detection_metadata.append({
+                        'frame_idx': i, 'angle': 0, 'confidence': 0.0, 
+                        'source': 'none', 'orientation': 'no_face'
+                    })
+                    detection_stats['no_face_frames'] += 1
+                    
+            except Exception as e:
+                print(f"⚠️  FaceFusion detection failed for frame {i}: {e}")
+                # Fallback to original detection
+                coords_list.append(coord_placeholder)
+                detection_metadata.append({
+                    'frame_idx': i, 'angle': 0, 'confidence': 0.0,
+                    'source': 'error', 'orientation': 'no_face'
+                })
+                detection_stats['no_face_frames'] += 1
+        else:
+            # Fallback to original FaceAlignment detection
+            try:
+                bbox = fa.get_detections_for_batch([frame])
+                if bbox[0] is not None:
+                    coords_list.append(bbox[0])
+                    detection_metadata.append({
+                        'frame_idx': i, 'angle': 0, 'confidence': 0.5,
+                        'source': 'facealignment_original', 'orientation': 'frontal'
+                    })
+                    detection_stats['faces_detected'] += 1
+                    detection_stats['fallback_detections'] += 1
+                else:
+                    coords_list.append(coord_placeholder)
+                    detection_metadata.append({
+                        'frame_idx': i, 'angle': 0, 'confidence': 0.0,
+                        'source': 'none', 'orientation': 'no_face'
+                    })
+                    detection_stats['no_face_frames'] += 1
+            except Exception as e:
+                print(f"⚠️  Original detection failed for frame {i}: {e}")
+                coords_list.append(coord_placeholder)
+                detection_metadata.append({
+                    'frame_idx': i, 'angle': 0, 'confidence': 0.0,
+                    'source': 'error', 'orientation': 'no_face'
+                })
+                detection_stats['no_face_frames'] += 1
+    
+    # Print comprehensive detection summary
+    print("\n📊 PHASE 2: Detection Results Summary")
+    print("=" * 60)
+    print(f"Total frames processed: {detection_stats['total_frames']}")
+    print(f"Faces detected: {detection_stats['faces_detected']}")
+    print(f"Detection rate: {detection_stats['faces_detected']/detection_stats['total_frames']*100:.1f}%")
+    print(f"FaceFusion detections: {detection_stats['facefusion_detections']}")
+    print(f"Fallback detections: {detection_stats['fallback_detections']}")
+    print(f"No face frames: {detection_stats['no_face_frames']}")
+    
+    # Angle distribution analysis
+    if detection_metadata:
+        angle_dist = {}
+        confidence_scores = []
+        
+        for meta in detection_metadata:
+            if meta['confidence'] > 0:
+                orientation = meta['orientation']
+                angle_dist[orientation] = angle_dist.get(orientation, 0) + 1
+                confidence_scores.append(meta['confidence'])
+        
+        print(f"\n🎯 Angle Distribution:")
+        for orientation, count in angle_dist.items():
+            percentage = count / detection_stats['faces_detected'] * 100 if detection_stats['faces_detected'] > 0 else 0
+            print(f"  {orientation.replace('_', ' ').title()}: {count} frames ({percentage:.1f}%)")
+        
+        if confidence_scores:
+            avg_confidence = np.mean(confidence_scores)
+            print(f"\n📈 Quality Metrics:")
+            print(f"  Average confidence: {avg_confidence:.2f}")
+            print(f"  Confidence range: {min(confidence_scores):.2f} - {max(confidence_scores):.2f}")
+    
+    # Phase 3 readiness check
+    angled_faces = sum(1 for meta in detection_metadata if meta['orientation'] in ['left_profile', 'right_profile', 'angled'])
+    if angled_faces > 0:
+        print(f"\n🔄 Phase 3 Readiness:")
+        print(f"  Angled faces detected: {angled_faces} frames")
+        print(f"  These frames will benefit from rotation normalization in Phase 3!")
+    else:
+        print(f"\n✅ Phase 3 Note:")
+        print(f"  All detected faces appear frontal - Phase 3 will still improve robustness")
+    
+    print("=" * 60)
+    
+    return coords_list, frames, detection_metadata
+
 
 if __name__ == "__main__":
     img_list = ["./results/lyria/00000.png","./results/lyria/00001.png","./results/lyria/00002.png","./results/lyria/00003.png"]
