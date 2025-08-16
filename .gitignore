@@ -16,3 +16,8 @@ ffplay*
 debug
 exp_out
 .gradio
+/direct_video_test_results
+/full_video_analysis
+/quick_test_analysis
+/real_video_test_results
+/simple_video_test_results
