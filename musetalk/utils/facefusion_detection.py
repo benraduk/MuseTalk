@@ -107,6 +107,7 @@ class FaceFusionDetector:
                 if detections and max(d['confidence'] for d in detections) > 0.7:
                     break
         
+        # Re-enabled FaceAlignment fallback since ONNX parsing isn't implemented yet
         # Always try FaceAlignment for better angle detection (even if FaceFusion worked)
         # FaceAlignment gives us better bounding boxes for angle analysis
         fallback_detections = self._detect_with_facealignment(frame, angle=0)
@@ -425,27 +426,33 @@ class FaceFusionDetector:
         
         try:
             # Use existing FaceAlignment detection
-            bboxes = self.fa_fallback.get_detections_for_batch([frame])
+            # Convert single frame to batch array format
+            frame_batch = np.array([frame])  # Convert list to numpy array
+            batch_detections = self.fa_fallback.get_detections_for_batch(frame_batch)
             
-            for bbox in bboxes:
-                if bbox is not None:
-                    x1, y1, x2, y2 = bbox
-                    
-                    # Calculate basic quality score based on face size
-                    area = (x2 - x1) * (y2 - y1)
-                    confidence = min(area / (200 * 200), 1.0)  # Normalize by expected face size
-                    confidence = max(confidence, 0.3)  # Minimum confidence for fallback
-                    
-                    # Enhanced angle detection using bounding box analysis
-                    face_angle = self._estimate_angle_from_bbox(bbox, frame.shape)
-                    
-                    detections.append({
-                        'bbox': [int(x1), int(y1), int(x2), int(y2)],
-                        'landmarks': None,
-                        'confidence': confidence,
-                        'source': 'facealignment_fallback',
-                        'angle': face_angle
-                    })
+            # Extract bboxes from the batch result (first item since we only passed one frame)
+            if batch_detections and len(batch_detections) > 0:
+                frame_detections = batch_detections[0]  # Get detections for our single frame
+                if frame_detections is not None:
+                    for bbox in frame_detections:
+                        if bbox is not None and len(bbox) >= 4:
+                            x1, y1, x2, y2 = bbox[:4]  # Take first 4 coordinates
+                            
+                            # Calculate basic quality score based on face size
+                            area = (x2 - x1) * (y2 - y1)
+                            confidence = min(area / (200 * 200), 1.0)  # Normalize by expected face size
+                            confidence = max(confidence, 0.3)  # Minimum confidence for fallback
+                            
+                            # Enhanced angle detection using bounding box analysis
+                            face_angle = self._estimate_angle_from_bbox(bbox, frame.shape)
+                            
+                            detections.append({
+                                'bbox': [int(x1), int(y1), int(x2), int(y2)],
+                                'landmarks': None,
+                                'confidence': confidence,
+                                'source': 'facealignment_fallback',
+                                'angle': face_angle
+                            })
         except Exception as e:
             print(f"⚠️  FaceAlignment fallback failed: {e}")
         

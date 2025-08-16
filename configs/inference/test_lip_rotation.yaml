@@ -1,0 +1,8 @@
+# Test configuration for Phase 3 Lip Rotation Integration
+# This config tests the enhanced angle detection and lip rotation post-processing
+
+lip_rotation_test:
+  video_path: "data/video/Canva_en.mp4"
+  audio_path: "data/audio/Canva_FR.m4a"
+  result_name: "Canva_en_with_lip_rotation.mp4"
+  bbox_shift: 0

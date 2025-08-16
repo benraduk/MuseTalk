@@ -19,3 +19,6 @@ exp_out
 /data/video
 /full_video_analysis
 /quick_test_analysis
+/direct_video_test_results
+/simple_video_test_results
+/real_video_test_results
