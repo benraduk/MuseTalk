@@ -19,7 +19,7 @@ from musetalk.utils.face_parsing import FaceParsing
 from musetalk.utils.audio_processor import AudioProcessor
 from musetalk.utils.utils import get_file_type, get_video_fps, datagen, datagen_enhanced, load_all_model
 
-from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder
+from musetalk.utils.preprocessing import get_landmark_and_bbox, get_landmark_and_bbox_enhanced, get_landmark_and_bbox_phase3, apply_lip_rotation_post_processing, read_imgs, coord_placeholder
 
 def fast_check_ffmpeg():
     try:
@@ -155,8 +155,15 @@ def main(args):
                     coord_list = pickle.load(f)
                 frame_list = read_imgs(input_img_list)
             else:
-                print("Extracting landmarks... time-consuming operation")
-                coord_list, frame_list = get_landmark_and_bbox(input_img_list, bbox_shift)
+                if args.enable_lip_rotation or args.test_phase3_detection:
+                    if args.test_phase3_detection:
+                        print("🧪 Testing Phase 3 detection (no lip rotation)...")
+                    else:
+                        print("🔄 Phase 3: Extracting landmarks with enhanced angle detection...")
+                    coord_list, frame_list, passthrough_frames = get_landmark_and_bbox_phase3(input_img_list, bbox_shift)
+                else:
+                    print("Extracting landmarks... time-consuming operation")
+                    coord_list, frame_list, passthrough_frames = get_landmark_and_bbox_enhanced(input_img_list, bbox_shift)
                 with open(crop_coord_save_path, 'wb') as f:
                     pickle.dump(coord_list, f)
             
@@ -243,6 +250,15 @@ def main(args):
             
             # Enhanced frame output with support for passthrough frames  
             print("Processing enhanced frame output (lip-sync + passthrough)")
+            
+            # Apply Phase 3 lip rotation post-processing if enabled
+            if args.enable_lip_rotation:
+                print("🎨 Applying Phase 3 lip rotation post-processing...")
+                # Create list of original frames matching the cycled structure
+                original_frames_cycle = [frame_list_cycle[i%(len(frame_list_cycle))] for i in range(len(res_frame_list))]
+                res_frame_list = apply_lip_rotation_post_processing(res_frame_list, original_frames_cycle)
+                print("✅ Lip rotation post-processing complete!")
+            
             for i, res_frame in enumerate(tqdm(res_frame_list)):
                 bbox = coord_list_cycle[i%(len(coord_list_cycle))]
                 ori_frame = copy.deepcopy(frame_list_cycle[i%(len(frame_list_cycle))])
@@ -337,5 +353,7 @@ if __name__ == "__main__":
     parser.add_argument("--left_cheek_width", type=int, default=90, help="Width of left cheek region")
     parser.add_argument("--right_cheek_width", type=int, default=90, help="Width of right cheek region")
     parser.add_argument("--version", type=str, default="v15", choices=["v1", "v15"], help="Model version to use")
+    parser.add_argument("--enable_lip_rotation", action="store_true", help="Enable Phase 3 lip rotation post-processing for angled faces")
+    parser.add_argument("--test_phase3_detection", action="store_true", help="Test Phase 3 detection without lip rotation (for debugging)")
     args = parser.parse_args()
     main(args)
