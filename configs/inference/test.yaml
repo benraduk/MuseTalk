@@ -1,6 +1,6 @@
 task_0:
  video_path: "data/video/Canva_en_short.mp4"
  audio_path: "data/audio/Canva_FR_short.m4a"
- bbox_shift: -9
- result_name: "Canva_en_short-9.mp4"
+ bbox_shift: 9
+ result_name: "Canva_en_short9.mp4"
  result_dir: "./results/optimized"
