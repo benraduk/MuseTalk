@@ -1,4 +1,4 @@
 task_0:
- video_path: "data/video/Canva_en.mp4"
- audio_path: "data/audio/Canva_FR.m4a"
-
+ video_path: "data/video/braiv_en.mp4"
+ audio_path: "data/audio/braiv_pt.mp3"
+ bbox_shift: 5

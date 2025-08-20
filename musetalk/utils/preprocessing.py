@@ -7,34 +7,12 @@ import cv2
 import pickle
 import os
 import json
-# SURGICAL ELIMINATION: Make mmpose optional (only needed for pose detection, not face detection)
-try:
-    from mmpose.apis import inference_topdown, init_model
-    from mmpose.structures import merge_data_samples
-    MMPOSE_AVAILABLE = True
-except ImportError:
-    MMPOSE_AVAILABLE = False
-    inference_topdown = None
-    init_model = None
-    merge_data_samples = None
-    print("⚠️  mmpose not available - pose detection disabled (face detection still works)")
 import torch
 from tqdm import tqdm
 
-# initialize the mmpose model (only if available)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-if MMPOSE_AVAILABLE:
-    config_file = './musetalk/utils/dwpose/rtmpose-l_8xb32-270e_coco-ubody-wholebody-384x288.py'
-    checkpoint_file = './models/dwpose/dw-ll_ucoco_384.pth'
-    model = init_model(config_file, checkpoint_file, device=device)
-    print("✅ DWPose model loaded for pose detection")
-else:
-    model = None
-    print("⚠️  DWPose disabled - using face detection only (surgical elimination)")
-
-# initialize the face detection model
+# Initialize face detection model (core MuseTalk functionality)
 device = "cuda" if torch.cuda.is_available() else "cpu"
-fa = FaceAlignment(LandmarksType._2D, flip_input=False,device=device)
+fa = FaceAlignment(LandmarksType._2D, flip_input=False, device=device)
 
 # maker if the bbox is not sufficient 
 coord_placeholder = (0.0,0.0,0.0,0.0)
@@ -54,188 +32,58 @@ def read_imgs(img_list):
         frames.append(frame)
     return frames
 
-def get_bbox_range(img_list,upperbondrange =0):
+# Removed get_bbox_range - DWPose dependency eliminated
+    
+
+def get_landmark_and_bbox(img_list, upperbondrange=0):
+    """
+    Simplified face detection using only FaceAlignment.
+    Returns face bounding boxes for frames with faces, coord_placeholder for frames without.
+    """
     frames = read_imgs(img_list)
-    batch_size_fa = 1  # Original safe value - face detection is memory intensive
+    batch_size_fa = 1  # Conservative batch size for face detection
     batches = [frames[i:i + batch_size_fa] for i in range(0, len(frames), batch_size_fa)]
     coords_list = []
-    landmarks = []
+    
     if upperbondrange != 0:
-        print('get key_landmark and face bounding boxes with the bbox_shift:',upperbondrange)
+        print(f'🔍 Face detection with bbox_shift: {upperbondrange}')
     else:
-        print('get key_landmark and face bounding boxes with the default value')
-    average_range_minus = []
-    average_range_plus = []
-    for fb in tqdm(batches):
-        results = inference_topdown(model, np.asarray(fb)[0])
-        results = merge_data_samples(results)
-        keypoints = results.pred_instances.keypoints
-        face_land_mark= keypoints[0][23:91]
-        face_land_mark = face_land_mark.astype(np.int32)
-        
-        # get bounding boxes by face detetion
+        print('🔍 Face detection with default bbox')
+    
+    for fb in tqdm(batches, desc="Detecting faces"):
+        # Get face bounding boxes using FaceAlignment
         bbox = fa.get_detections_for_batch(np.asarray(fb))
         
-        # adjust the bounding box refer to landmark
-        # Add the bounding box to a tuple and append it to the coordinates list
         for j, f in enumerate(bbox):
-            if f is None: # no face in the image
+            if f is None:  # No face detected
                 coords_list += [coord_placeholder]
                 continue
             
-            half_face_coord =  face_land_mark[29]#np.mean([face_land_mark[28], face_land_mark[29]], axis=0)
-            range_minus = (face_land_mark[30]- face_land_mark[29])[1]
-            range_plus = (face_land_mark[29]- face_land_mark[28])[1]
-            average_range_minus.append(range_minus)
-            average_range_plus.append(range_plus)
+            # Apply bbox_shift if specified (simple vertical adjustment)
+            x1, y1, x2, y2 = f
             if upperbondrange != 0:
-                half_face_coord[1] = upperbondrange+half_face_coord[1] #手动调整  + 向下（偏29）  - 向上（偏28）
-
-    text_range=f"Total frame:「{len(frames)}」 Manually adjust range : [ -{int(sum(average_range_minus) / len(average_range_minus))}~{int(sum(average_range_plus) / len(average_range_plus))} ] , the current value: {upperbondrange}"
-    return text_range
-    
-
-def get_landmark_and_bbox(img_list,upperbondrange =0):
-    frames = read_imgs(img_list)
-    batch_size_fa = 1  # Original safe value - face detection is memory intensive
-    batches = [frames[i:i + batch_size_fa] for i in range(0, len(frames), batch_size_fa)]
-    coords_list = []
-    landmarks = []
-    if upperbondrange != 0:
-        print('get key_landmark and face bounding boxes with the bbox_shift:',upperbondrange)
-    else:
-        print('get key_landmark and face bounding boxes with the default value')
-    average_range_minus = []
-    average_range_plus = []
-    for fb in tqdm(batches):
-        # SURGICAL ELIMINATION: Make mmpose pose detection optional
-        if MMPOSE_AVAILABLE and model is not None:
-            # Use mmpose for pose detection when available
-            results = inference_topdown(model, np.asarray(fb)[0])
-            results = merge_data_samples(results)
-            keypoints = results.pred_instances.keypoints
-            face_land_mark= keypoints[0][23:91]
-            face_land_mark = face_land_mark.astype(np.int32)
-        else:
-            # Fallback: Use face detection only (no pose detection)
-            face_land_mark = None
-        
-        # get bounding boxes by face detetion (always works)
-        bbox = fa.get_detections_for_batch(np.asarray(fb))
-        
-        # adjust the bounding box refer to landmark (if available)
-        # Add the bounding box to a tuple and append it to the coordinates list
-        for j, f in enumerate(bbox):
-            if f is None: # no face in the image
-                coords_list += [coord_placeholder]
-                continue
+                y1 = max(0, y1 + upperbondrange)  # Shift top boundary
             
-            # SURGICAL ELIMINATION: Use landmark-based adjustment only if mmpose is available
-            if MMPOSE_AVAILABLE and model is not None and face_land_mark is not None:
-                # Use mmpose landmarks for precise bounding box adjustment
-                half_face_coord =  face_land_mark[29]#np.mean([face_land_mark[28], face_land_mark[29]], axis=0)
-                range_minus = (face_land_mark[30]- face_land_mark[29])[1]
-                range_plus = (face_land_mark[29]- face_land_mark[28])[1]
-                average_range_minus.append(range_minus)
-                average_range_plus.append(range_plus)
-                if upperbondrange != 0:
-                    half_face_coord[1] = upperbondrange+half_face_coord[1] #手动调整  + 向下（偏29）  - 向上（偏28）
-                half_face_dist = np.max(face_land_mark[:,1]) - half_face_coord[1]
-                min_upper_bond = 0
-                upper_bond = max(min_upper_bond, half_face_coord[1] - half_face_dist)
-                
-                f_landmark = (np.min(face_land_mark[:, 0]),int(upper_bond),np.max(face_land_mark[:, 0]),np.max(face_land_mark[:,1]))
-                x1, y1, x2, y2 = f_landmark
-                
-                if y2-y1<=0 or x2-x1<=0 or x1<0: # if the landmark bbox is not suitable, reuse the bbox
-                    coords_list += [f]
-                    w,h = f[2]-f[0], f[3]-f[1]
-                    print("error bbox:",f)
-                else:
-                    coords_list += [f_landmark]
-            else:
-                # Fallback: Use face detection bbox directly (no landmark adjustment)
-                coords_list += [f]
-                # Add dummy values for range calculation to avoid division by zero
-                average_range_minus.append(10)  # Default reasonable values
-                average_range_plus.append(10)
+            # Ensure bbox stays within image bounds
+            img_height, img_width = fb[j].shape[:2]
+            x1 = max(0, x1)
+            x2 = min(img_width, x2)
+            y1 = max(0, y1)
+            y2 = min(img_height, y2)
+            
+            coords_list += [(x1, y1, x2, y2)]
     
-    print("********************************************bbox_shift parameter adjustment**********************************************************")
-    print(f"Total frame:「{len(frames)}」 Manually adjust range : [ -{int(sum(average_range_minus) / len(average_range_minus))}~{int(sum(average_range_plus) / len(average_range_plus))} ] , the current value: {upperbondrange}")
-    print("*************************************************************************************************************************************")
-    return coords_list,frames
+    print("="*80)
+    print(f"✅ Face detection complete: {len(frames)} frames processed")
+    face_count = sum(1 for coord in coords_list if coord != coord_placeholder)
+    print(f"📊 Faces detected: {face_count}/{len(frames)} frames")
+    print("="*80)
+    
+    return coords_list, frames
 
 
-def get_landmark_and_bbox_enhanced(img_list, upperbondrange=0):
-    """
-    Enhanced version that tracks ALL frames, including those without faces.
-    Returns coordinates, frames, and passthrough frame mapping for FaceFusion-style processing.
-    """
-    frames = read_imgs(img_list)
-    batch_size_fa = 1  # Original safe value - face detection is memory intensive
-    batches = [frames[i:i + batch_size_fa] for i in range(0, len(frames), batch_size_fa)]
-    coords_list = []
-    passthrough_frames = {}  # Track frames without faces for passthrough
-    face_frame_count = 0
-    
-    if upperbondrange != 0:
-        print('get key_landmark and face bounding boxes with the bbox_shift:',upperbondrange)
-    else:
-        print('get key_landmark and face bounding boxes with the default value')
-    average_range_minus = []
-    average_range_plus = []
-    
-    frame_idx = 0
-    for fb in tqdm(batches):
-        results = inference_topdown(model, np.asarray(fb)[0])
-        results = merge_data_samples(results)
-        keypoints = results.pred_instances.keypoints
-        face_land_mark= keypoints[0][23:91]
-        face_land_mark = face_land_mark.astype(np.int32)
-        
-        # get bounding boxes by face detetion
-        bbox = fa.get_detections_for_batch(np.asarray(fb))
-        
-        # adjust the bounding box refer to landmark
-        # Add the bounding box to a tuple and append it to the coordinates list
-        for j, f in enumerate(bbox):
-            current_frame = frames[frame_idx]
-            
-            if f is None: # no face in the image
-                coords_list += [coord_placeholder]
-                passthrough_frames[frame_idx] = current_frame  # Store for passthrough
-                print(f"Frame {frame_idx}: No face detected - will use passthrough")
-            else:
-                face_frame_count += 1
-                half_face_coord =  face_land_mark[29]#np.mean([face_land_mark[28], face_land_mark[29]], axis=0)
-                range_minus = (face_land_mark[30]- face_land_mark[29])[1]
-                range_plus = (face_land_mark[29]- face_land_mark[28])[1]
-                average_range_minus.append(range_minus)
-                average_range_plus.append(range_plus)
-                if upperbondrange != 0:
-                    half_face_coord[1] = upperbondrange+half_face_coord[1] #手动调整  + 向下（偏29）  - 向上（偏28）
-                half_face_dist = np.max(face_land_mark[:,1]) - half_face_coord[1]
-                min_upper_bond = 0
-                upper_bond = max(min_upper_bond, half_face_coord[1] - half_face_dist)
-                
-                f_landmark = (np.min(face_land_mark[:, 0]),int(upper_bond),np.max(face_land_mark[:, 0]),np.max(face_land_mark[:,1]))
-                x1, y1, x2, y2 = f_landmark
-                
-                if y2-y1<=0 or x2-x1<=0 or x1<0: # if the landmark bbox is not suitable, reuse the bbox
-                    coords_list += [f]
-                    w,h = f[2]-f[0], f[3]-f[1]
-                    print("error bbox:",f)
-                else:
-                    coords_list += [f_landmark]
-            
-            frame_idx += 1
-    
-    print("********************************************Enhanced bbox_shift parameter adjustment**************************************************")
-    print(f"Total frames: {len(frames)} | Frames with faces: {face_frame_count} | Passthrough frames: {len(passthrough_frames)}")
-    if average_range_minus and average_range_plus:
-        print(f"Manually adjust range : [ -{int(sum(average_range_minus) / len(average_range_minus))}~{int(sum(average_range_plus) / len(average_range_plus))} ] , current value: {upperbondrange}")
-    print("*************************************************************************************************************************************")
-    return coords_list, frames, passthrough_frames
+# Removed get_landmark_and_bbox_enhanced - DWPose dependency eliminated
+# The main get_landmark_and_bbox function now handles all cases
     
 
 if __name__ == "__main__":
