@@ -1,4 +1,4 @@
-from PIL import Image
+from PIL import Image, ImageDraw
 import numpy as np
 import cv2
 import copy
@@ -32,7 +32,7 @@ def face_seg(image, mode="raw", fp=None):
     return seg_image
 
 
-def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode="raw", fp=None):
+def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode="raw", fp=None, use_elliptical_mask=True, ellipse_padding_factor=0.1):
     """
     将裁剪的面部图像粘贴回原始图像，并进行一些处理。
 
@@ -43,6 +43,8 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
         upper_boundary_ratio (float): 用于控制面部区域的保留比例。
         expand (float): 扩展因子，用于放大裁剪框。
         mode: 融合mask构建方式 
+        use_elliptical_mask (bool): 是否使用椭圆形掩码而不是矩形掩码。
+        ellipse_padding_factor (float): 椭圆掩码的内边距因子，控制椭圆相对于面部边界的大小。
 
     Returns:
         numpy.ndarray: 处理后的图像。
@@ -66,8 +68,36 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
     
     mask_small = mask_image.crop((x - x_s, y - y_s, x1 - x_s, y1 - y_s))  # 裁剪出面部区域的掩码
     
+    # Create mask with elliptical or rectangular shape
     mask_image = Image.new('L', ori_shape, 0)  # 创建一个全黑的掩码图像
-    mask_image.paste(mask_small, (x - x_s, y - y_s, x1 - x_s, y1 - y_s))  # 将面部掩码粘贴到全黑图像上
+    
+    if use_elliptical_mask:
+        # Create elliptical mask for more natural blending
+        face_width = x1 - x
+        face_height = y1 - y
+        
+        # Create elliptical mask for the face region
+        ellipse_mask = Image.new('L', (face_width, face_height), 0)
+        draw = ImageDraw.Draw(ellipse_mask)
+        
+        # Calculate padding to make ellipse smaller than face bounds
+        padding_w = int(face_width * ellipse_padding_factor)
+        padding_h = int(face_height * ellipse_padding_factor)
+        
+        # Draw ellipse (white = include area, black = exclude)
+        draw.ellipse([padding_w, padding_h, face_width - padding_w, face_height - padding_h], fill=255)
+        
+        # Apply the face parsing mask to the elliptical mask (intersection)
+        ellipse_array = np.array(ellipse_mask)
+        mask_small_array = np.array(mask_small)
+        combined_mask = np.minimum(ellipse_array, mask_small_array)
+        final_face_mask = Image.fromarray(combined_mask)
+        
+        # Paste the combined elliptical + parsing mask
+        mask_image.paste(final_face_mask, (x - x_s, y - y_s))
+    else:
+        # Original rectangular mask behavior
+        mask_image.paste(mask_small, (x - x_s, y - y_s, x1 - x_s, y1 - y_s))  # 将面部掩码粘贴到全黑图像上
     
     
     # 保留面部区域的上半部分（用于控制说话区域）

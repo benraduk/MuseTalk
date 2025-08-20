@@ -1,11 +1,11 @@
 @echo off
 REM MuseTalk OPTIMIZED Inference - Maximum Performance
-REM 20-30x faster face detection + optimized batch sizes
+REM Optimized inference batch sizes + coordinate caching
 
 echo 🚀 MuseTalk OPTIMIZED Inference (High Performance Mode)
 echo 📁 Working directory: %CD%
 echo 🐍 Setting PYTHONPATH to include current directory
-echo ⚡ Optimizations: 32x face detection batching + 64 inference batch size
+echo ⚡ Optimizations: 16 inference batch size + coordinate caching
 echo ============================================================
 
 REM Set PYTHONPATH to include current directory
@@ -17,9 +17,12 @@ if not "%CONDA_DEFAULT_ENV%"=="musetalk" (
     call conda activate musetalk
 )
 
-REM Run OPTIMIZED inference with maximum batch sizes
-echo ⚡ Running with optimized batch sizes for maximum speed...
-python scripts/inference.py --inference_config configs/inference/test.yaml --unet_config ./models/musetalkV15/musetalk.json --batch_size 16 --use_saved_coord
+REM Run OPTIMIZED inference with optimized settings
+echo ⚡ Running with optimized settings for maximum speed...
+echo 📊 Batch size: 16 (AI inference optimization)
+echo 💾 Coordinate caching: Enabled (skip face detection on re-runs)
+echo 📁 Output directory: ./results/optimized/
+python scripts/inference.py --inference_config configs/inference/test.yaml --unet_config ./models/musetalkV15/musetalk.json --batch_size 16 --use_saved_coord --result_dir "./results/optimized"
 
 REM Restore original directory
 echo ============================================================

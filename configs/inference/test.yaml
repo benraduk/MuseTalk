@@ -1,4 +1,6 @@
 task_0:
  video_path: "data/video/Canva_en.mp4"
  audio_path: "data/audio/Canva_FR.m4a"
- bbox_shift: 0
+ bbox_shift: 3
+ result_name: "Canva_en_mask-oval.mp4"
+ result_dir: "./results/optimized"
