@@ -41,7 +41,7 @@ def get_landmark_and_bbox(img_list, upperbondrange=0):
     Returns face bounding boxes for frames with faces, coord_placeholder for frames without.
     """
     frames = read_imgs(img_list)
-    batch_size_fa = 1  # Conservative batch size for face detection
+    batch_size_fa = 1  # 🔧 REVERTED: Batch processing is slower for SFD face detector
     batches = [frames[i:i + batch_size_fa] for i in range(0, len(frames), batch_size_fa)]
     coords_list = []
     
