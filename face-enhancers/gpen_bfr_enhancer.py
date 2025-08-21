@@ -20,11 +20,41 @@ Usage:
     enhanced_face = enhancer.enhance_face(face_image)
 """
 
+# Suppress ONNX Runtime verbose warnings BEFORE any imports
 import os
+import warnings
+import logging
+
+# Multiple approaches to suppress ONNX warnings
+os.environ['ORT_LOGGING_LEVEL'] = '4'  # Fatal errors only
+os.environ['OMP_NUM_THREADS'] = '1'    # Reduce threading warnings
+warnings.filterwarnings('ignore', category=UserWarning)
+logging.getLogger('onnxruntime').setLevel(logging.ERROR)
+
 import cv2
 import numpy as np
-from typing import List, Optional, Tuple
-import logging
+from typing import List, Optional, Tuple, Dict, Any
+
+# Import parameter configurations
+try:
+    from .gpen_bfr_parameter_configs import (
+        GPEN_BFR_CONFIGS, 
+        apply_preprocessing, 
+        apply_postprocessing,
+        get_config_by_name
+    )
+except ImportError:
+    # Fallback for direct execution
+    try:
+        from gpen_bfr_parameter_configs import (
+            GPEN_BFR_CONFIGS, 
+            apply_preprocessing, 
+            apply_postprocessing,
+            get_config_by_name
+        )
+    except ImportError:
+        print("⚠️ Parameter configurations not available")
+        GPEN_BFR_CONFIGS = None
 
 # Global flag to track ONNX availability
 _onnx_available = None
@@ -85,7 +115,9 @@ class GPENBFREnhancer:
     
     def __init__(self, 
                  model_path: str = "models/gpen_bfr/gpen_bfr_256.onnx",
-                 device: str = "auto"):
+                 device: str = "auto",
+                 config_name: str = "CONSERVATIVE",
+                 custom_config: Optional[Dict[str, Any]] = None):
         
         # Check ONNX availability
         onnx_info = _check_onnx_availability()
@@ -104,19 +136,51 @@ class GPENBFREnhancer:
         self.model_path = model_path
         self.device = device
         
+        # Setup enhancement configuration
+        if custom_config is not None:
+            self.config = custom_config
+        elif GPEN_BFR_CONFIGS is not None:
+            self.config = get_config_by_name(config_name)
+        else:
+            # Default fallback config (CONSERVATIVE)
+            self.config = {
+                'name': 'Conservative Enhancement',
+                'enhancement_strength': 0.5,
+                'contrast_boost': 1.02,
+                'sharpening': 0.1,
+                'color_correction': 'none',
+                'noise_reduction': 0.05,
+                'gamma_correction': 1.0
+            }
+        
+        print(f"🎨 Using enhancement config: {self.config.get('name', config_name)}")
+        
         # Setup providers based on device preference
         self.providers = self._setup_providers(device, onnx_info['providers'])
         
-        # Initialize ONNX session
+        # Initialize ONNX session with maximum warning suppression
         try:
+            import sys
+            from io import StringIO
+            
             session_options = self.ort.SessionOptions()
             session_options.graph_optimization_level = self.ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            session_options.log_severity_level = 4  # Fatal errors only
+            session_options.enable_profiling = False
             
-            self.session = self.ort.InferenceSession(
-                model_path, 
-                sess_options=session_options,
-                providers=self.providers
-            )
+            # Temporarily redirect stderr to suppress C++ warnings during model loading
+            old_stderr = sys.stderr
+            sys.stderr = StringIO()
+            
+            try:
+                self.session = self.ort.InferenceSession(
+                    model_path, 
+                    sess_options=session_options,
+                    providers=self.providers
+                )
+            finally:
+                # Restore stderr
+                sys.stderr = old_stderr
             
             # Get input/output names and shapes
             self.input_name = self.session.get_inputs()[0].name
@@ -223,7 +287,7 @@ class GPENBFREnhancer:
     
     def enhance_face(self, face_image: np.ndarray) -> np.ndarray:
         """
-        Enhance a single face image using GPEN-BFR
+        Enhance a single face image using GPEN-BFR with configurable parameters
         
         Args:
             face_image: Input face image (BGR format, preferably 256x256)
@@ -232,8 +296,18 @@ class GPENBFREnhancer:
             Enhanced face image (BGR format, 256x256)
         """
         try:
-            # Preprocess
-            input_tensor = self.preprocess_face(face_image)
+            # Store original for blending
+            original_face = face_image.copy()
+            if original_face.shape[:2] != (256, 256):
+                original_face = cv2.resize(original_face, (256, 256), interpolation=cv2.INTER_LANCZOS4)
+            
+            # Apply preprocessing if available
+            preprocessed = original_face
+            if GPEN_BFR_CONFIGS is not None:
+                preprocessed = apply_preprocessing(original_face, self.config)
+            
+            # Preprocess for ONNX model
+            input_tensor = self.preprocess_face(preprocessed)
             
             # Run inference
             output_tensor = self.session.run(
@@ -241,8 +315,12 @@ class GPENBFREnhancer:
                 {self.input_name: input_tensor}
             )[0]
             
-            # Postprocess
+            # Postprocess ONNX output
             enhanced_face = self.postprocess_face(output_tensor)
+            
+            # Apply parameter-based post-processing if available
+            if GPEN_BFR_CONFIGS is not None:
+                enhanced_face = apply_postprocessing(original_face, enhanced_face, self.config)
             
             return enhanced_face
             
@@ -286,8 +364,87 @@ class GPENBFREnhancer:
             'providers': self.session.get_providers() if hasattr(self, 'session') else [],
             'input_shape': self.input_shape if hasattr(self, 'input_shape') else None,
             'output_shape': self.output_shape if hasattr(self, 'output_shape') else None,
-            'device': self.device
+            'device': self.device,
+            'config': self.config
         }
+    
+    def update_config(self, config_name: str = None, custom_config: Dict[str, Any] = None):
+        """Update the enhancement configuration"""
+        if custom_config is not None:
+            self.config = custom_config
+        elif config_name is not None and GPEN_BFR_CONFIGS is not None:
+            self.config = get_config_by_name(config_name)
+        
+        print(f"🎨 Updated to config: {self.config.get('name', 'Custom')}")
+    
+    def get_available_configs(self) -> Dict[str, str]:
+        """Get list of available configuration presets"""
+        if GPEN_BFR_CONFIGS is not None:
+            return {name: config['description'] for name, config in GPEN_BFR_CONFIGS.items()}
+        else:
+            return {"CONSERVATIVE": "Default conservative configuration"}
+    
+    def enhance_face_with_config(self, face_image: np.ndarray, config_name: str) -> np.ndarray:
+        """
+        Enhance a face with a specific configuration (temporary override)
+        
+        Args:
+            face_image: Input face image (BGR format, preferably 256x256)
+            config_name: Configuration name to use for this enhancement
+            
+        Returns:
+            Enhanced face image (BGR format, 256x256)
+        """
+        # Store current config
+        original_config = self.config.copy()
+        
+        try:
+            # Temporarily switch to requested config
+            self.update_config(config_name)
+            
+            # Enhance with new config
+            enhanced = self.enhance_face(face_image)
+            
+            return enhanced
+            
+        finally:
+            # Restore original config
+            self.config = original_config
+    
+    def enhance_batch_with_configs(self, face_images: List[np.ndarray], 
+                                 config_names: List[str], 
+                                 show_progress: bool = True) -> List[np.ndarray]:
+        """
+        Enhance multiple faces with different configurations
+        
+        Args:
+            face_images: List of input face images
+            config_names: List of configuration names (one per face)
+            show_progress: Whether to show progress
+            
+        Returns:
+            List of enhanced face images
+        """
+        if len(face_images) != len(config_names):
+            raise ValueError("Number of images must match number of config names")
+        
+        enhanced_faces = []
+        total_faces = len(face_images)
+        
+        if show_progress:
+            print(f"🎨 Enhancing {total_faces} faces with different configurations...")
+        
+        for i, (face_image, config_name) in enumerate(zip(face_images, config_names)):
+            if show_progress:
+                print(f"   Processing face {i+1}/{total_faces} with {config_name}...")
+            
+            enhanced = self.enhance_face_with_config(face_image, config_name)
+            enhanced_faces.append(enhanced)
+        
+        if show_progress:
+            print(f"✅ Enhanced {total_faces} faces with custom configurations")
+        
+        return enhanced_faces
 
 
 def test_gpen_bfr_availability():

@@ -189,6 +189,10 @@ enhancer = GPENBFREnhancer()
 
 The API is nearly identical, making migration seamless!
 
+## 📝 **Expected ONNX Warnings**
+
+When loading GPEN-BFR, you may see ONNX Runtime warnings about "graph inputs" and "const folding". These are **completely harmless** optimization notices from the model itself and don't affect functionality or quality. They indicate that the model could be re-exported for slightly better performance, but this is not necessary for normal use.
+
 ## 📚 **Additional Resources**
 
 - [FaceFusion Project](https://github.com/facefusion/facefusion) - Source of GPEN-BFR models
