@@ -4,7 +4,7 @@
 CheckpointsDir="models"
 
 # Create necessary directories
-mkdir -p models/musetalk models/musetalkV15 models/syncnet models/dwpose models/face-parse-bisent models/sd-vae models/whisper models/gfpgan models/gpen_bfr
+mkdir -p models/musetalk models/musetalkV15 models/syncnet models/dwpose models/face-parse-bisent models/sd-vae models/whisper models/gpen_bfr
 
 # Install required packages
 pip install -U "huggingface_hub[cli]"
@@ -49,15 +49,6 @@ huggingface-cli download ByteDance/LatentSync \
 gdown --id 154JgKpzCPW82qINcVieuPH3fZ2e0P812 -O $CheckpointsDir/face-parse-bisent/79999_iter.pth
 curl -L https://download.pytorch.org/models/resnet18-5c106cde.pth \
   -o $CheckpointsDir/face-parse-bisent/resnet18-5c106cde.pth
-
-# Download GFPGAN models
-echo "📥 Downloading GFPGAN models..."
-curl -L https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth \
-  -o $CheckpointsDir/gfpgan/GFPGANv1.4.pth
-curl -L https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.3.pth \
-  -o $CheckpointsDir/gfpgan/GFPGANv1.3.pth
-curl -L https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.2.pth \
-  -o $CheckpointsDir/gfpgan/GFPGANv1.2.pth
 
 # Download GPEN-BFR models
 echo "📥 Downloading GPEN-BFR models..."

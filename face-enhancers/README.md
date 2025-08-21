@@ -8,11 +8,9 @@ This folder contains all face enhancement models and utilities for improving the
 - `gpen_bfr_enhancer.py` - ONNX-based GPEN-BFR 256 wrapper
 - `test_gpen_bfr_on_vae_faces.py` - Test script for GPEN-BFR enhancement
 
-### **GFPGAN (Legacy)**
-- `gfpgan_enhancer.py` - PyTorch-based GFPGAN wrapper (has import issues)
-- `gfpgan_parameter_configs.py` - GFPGAN parameter configurations
-- `GFPGAN_Parameter_Guide.md` - Guide for GFPGAN parameters
-- `gfpgan-plan.md` - Original GFPGAN integration plan
+### **Configuration & Testing**
+- `gpen_bfr_parameter_configs.py` - GPEN-BFR enhancement presets
+- `test_gpen_bfr_setup.py` - Setup verification script
 
 ## 🎯 **Recommended Approach: GPEN-BFR**
 
@@ -21,12 +19,12 @@ GPEN-BFR is the recommended face enhancement solution because:
 ### **Technical Advantages**
 - ✅ **ONNX Runtime**: No PyTorch conflicts, more stable
 - ✅ **Perfect Size**: 256x256 input/output (matches MuseTalk exactly)
-- ✅ **Better Quality**: More natural results than GFPGAN
+- ✅ **Better Quality**: More natural results with excellent detail preservation
 - ✅ **GPU Acceleration**: CUDA support through ONNX
 - ✅ **Cross-Platform**: Works consistently across systems
 
 ### **Quality Benefits**
-- 🎨 **Natural Enhancement**: Less over-processing than GFPGAN
+- 🎨 **Natural Enhancement**: Subtle, realistic improvements without over-processing
 - 👁️ **Identity Preservation**: Maintains original facial features
 - 💋 **Lip Quality**: Specifically good for lip region enhancement
 - 🖼️ **Artifact Reduction**: Fewer visual artifacts

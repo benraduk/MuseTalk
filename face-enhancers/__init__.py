@@ -7,7 +7,6 @@ the quality of AI-generated faces in the MuseTalk pipeline.
 
 Available enhancers:
 - GPENBFREnhancer: ONNX-based GPEN-BFR 256 (recommended)
-- GFPGANEnhancer: PyTorch-based GFPGAN (legacy, has import issues)
 """
 
 __version__ = "1.0.0"
@@ -21,9 +20,4 @@ except ImportError:
     # GPEN-BFR not available
     __all__ = []
 
-try:
-    from .gfpgan_enhancer import GFPGANEnhancer
-    __all__.append("GFPGANEnhancer")
-except ImportError:
-    # GFPGAN not available
-    pass
+
