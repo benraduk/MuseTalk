@@ -1,5 +1,5 @@
 task_0:
- video_path: "data/video/Canva_en_short.mp4"
- audio_path: "data/audio/Canva_FR_short.m4a"
- result_name: "Canva_en_jaw-9.mp4"
- result_dir: "./results/optimized"
+ video_path: "data/video/Canva_en.mp4"
+ audio_path: "data/audio/Canva_FR.m4a"
+ result_name: "Canva_full-gpen-bfr.mp4"
+ result_dir: "./results/enhanced"
