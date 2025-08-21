@@ -19,9 +19,9 @@ gdown
 requests
 imageio[ffmpeg]
 
-# FaceFusion-inspired dependencies for multi-angle processing
+# GPEN-BFR Face Enhancement Dependencies (ONNX-based)
 onnx>=1.17.0
-onnxruntime-gpu>=1.22.0  # GPU acceleration for face detection/landmarks
+onnxruntime-gpu>=1.22.0  # GPU acceleration for GPEN-BFR enhancement
 scipy>=1.15.0
 psutil>=7.0.0
 

@@ -17,3 +17,6 @@ debug
 exp_out
 .gradio
 /data
+/facefusion
+/test_gfpgan_output
+/test_gpen_bfr_output

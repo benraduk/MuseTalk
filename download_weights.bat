@@ -14,6 +14,7 @@ mkdir %CheckpointsDir%\face-parse-bisent
 mkdir %CheckpointsDir%\sd-vae-ft-mse
 mkdir %CheckpointsDir%\whisper
 mkdir %CheckpointsDir%\gfpgan
+mkdir %CheckpointsDir%\gpen_bfr
 
 :: Install required packages
 pip install -U "huggingface_hub[cli]"
@@ -50,6 +51,10 @@ echo Downloading GFPGAN models...
 curl -L https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth -o %CheckpointsDir%\gfpgan\GFPGANv1.4.pth
 curl -L https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.3.pth -o %CheckpointsDir%\gfpgan\GFPGANv1.3.pth
 curl -L https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.2.pth -o %CheckpointsDir%\gfpgan\GFPGANv1.2.pth
+
+:: Download GPEN-BFR models
+echo Downloading GPEN-BFR models...
+curl -L "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/gpen_bfr_256.onnx" -o %CheckpointsDir%\gpen_bfr\gpen_bfr_256.onnx
 
 echo All weights have been downloaded successfully!
 endlocal 
