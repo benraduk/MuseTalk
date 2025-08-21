@@ -21,6 +21,19 @@ from musetalk.utils.utils import get_file_type, get_video_fps, datagen, datagen_
 
 from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder
 
+# Import GPEN-BFR face enhancer
+try:
+    # Add face-enhancers to path
+    face_enhancers_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'face-enhancers')
+    if face_enhancers_path not in sys.path:
+        sys.path.insert(0, face_enhancers_path)
+    
+    from gpen_bfr_enhancer import GPENBFREnhancer
+    GPEN_BFR_AVAILABLE = True
+except ImportError as e:
+    print("Warning: GPEN-BFR not available:", str(e))
+    GPEN_BFR_AVAILABLE = False
+
 def fast_check_ffmpeg():
     try:
         subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
@@ -76,6 +89,26 @@ def main(args):
         )
     else:  # v1
         fp = FaceParsing()
+    
+    # Initialize GPEN-BFR face enhancer if enabled
+    gpen_bfr_enhancer = None
+    if args.enable_gpen_bfr and GPEN_BFR_AVAILABLE:
+        try:
+            print("🎨 Initializing GPEN-BFR face enhancer...")
+            gpen_bfr_enhancer = GPENBFREnhancer(
+                model_path=args.gpen_bfr_model_path,
+                device="auto",
+                config_name=args.gpen_bfr_config
+            )
+            print(f"✅ GPEN-BFR initialized with config: {args.gpen_bfr_config}")
+        except Exception as e:
+            print(f"Warning: GPEN-BFR initialization failed: {e}")
+            print("   Continuing without face enhancement...")
+            gpen_bfr_enhancer = None
+    elif args.enable_gpen_bfr and not GPEN_BFR_AVAILABLE:
+        print("Warning: GPEN-BFR requested but not available. Install dependencies with:")
+        print("   pip install onnx onnxruntime-gpu scipy psutil")
+        print("   Continuing without face enhancement...")
     
     # Load inference configuration
     inference_config = OmegaConf.load(args.inference_config)
@@ -227,6 +260,24 @@ def main(args):
                     pred_latents = unet.model(latent_batch, timesteps, encoder_hidden_states=audio_feature_batch).sample
                     recon = vae.decode_latents(pred_latents)
                     
+                    # Apply GPEN-BFR face enhancement if enabled
+                    if gpen_bfr_enhancer is not None:
+                        try:
+                            # Convert tensor to numpy array for enhancement
+                            enhanced_faces = []
+                            for face_idx in range(recon.shape[0]):
+                                face_image = recon[face_idx]  # Already in correct format from VAE
+                                enhanced_face = gpen_bfr_enhancer.enhance_face(face_image)
+                                enhanced_faces.append(enhanced_face)
+                            
+                            # Convert back to numpy array
+                            recon = np.stack(enhanced_faces, axis=0)
+                            
+                        except Exception as e:
+                            print(f"Warning: GPEN-BFR enhancement failed for batch: {e}")
+                            print("   Using original VAE output...")
+                            # Continue with original recon if enhancement fails
+                    
                     # Process results according to batch types
                     process_idx = 0
                     for process_type in batch_data['process_types']:
@@ -337,5 +388,13 @@ if __name__ == "__main__":
     parser.add_argument("--left_cheek_width", type=int, default=90, help="Width of left cheek region")
     parser.add_argument("--right_cheek_width", type=int, default=90, help="Width of right cheek region")
     parser.add_argument("--version", type=str, default="v15", choices=["v1", "v15"], help="Model version to use")
+    
+    # GPEN-BFR Face Enhancement Parameters
+    parser.add_argument("--enable_gpen_bfr", action="store_true", help="Enable GPEN-BFR face enhancement")
+    parser.add_argument("--gpen_bfr_model_path", type=str, default="models/gpen_bfr/gpen_bfr_256.onnx", help="Path to GPEN-BFR model")
+    parser.add_argument("--gpen_bfr_config", type=str, default="CONSERVATIVE", 
+                       choices=["NATURAL", "BALANCED", "QUALITY_FOCUSED", "CONSERVATIVE", "DRAMATIC", "SKIN_FOCUS", "DETAIL_ENHANCE", "LIPS_OPTIMIZED"],
+                       help="GPEN-BFR enhancement configuration preset")
+    
     args = parser.parse_args()
     main(args)

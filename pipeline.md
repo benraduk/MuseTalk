@@ -63,13 +63,14 @@ for frame in video_frames:
 - **VAE Decoding**: Converts latents back to images
 - **Handles Mixed Batches**: Process + passthrough frames together
 
-### 6.5. 🎨 Face Enhancement (Optional - GFPGAN)
-**Script**: `scripts/inference.py` (line ~228, after VAE decoding)
-- **Quality Enhancement**: Uses GFPGAN to improve AI-generated face quality
-- **Resolution Upscaling**: Can upscale from 256x256 to 512x512 or higher
+### 6.5. 🎨 Face Enhancement (Optional - GPEN-BFR)
+**Script**: `scripts/inference.py` (lines 258-274, after VAE decoding)
+- **Quality Enhancement**: Uses GPEN-BFR to improve AI-generated face quality
+- **ONNX Runtime**: Stable, fast inference with GPU acceleration
 - **Artifact Reduction**: Removes VAE decoding artifacts and improves realism
-- **Fallback System**: Uses basic upscaling if GFPGAN fails
-- **GPU Acceleration**: Leverages CUDA for 5-10x speed improvement
+- **Configurable Enhancement**: Multiple presets (CONSERVATIVE, NATURAL, QUALITY_FOCUSED, etc.)
+- **Fallback System**: Continues with original VAE output if enhancement fails
+- **GPU Acceleration**: Leverages CUDA for optimal performance
 
 ### 7. 🎨 Frame Composition & Blending
 **Script**: `scripts/inference.py` (lines 245-275)
@@ -111,7 +112,7 @@ for frame in video_frames:
 3. **VAE** → Image encoding/decoding
 4. **UNet** → Lip-sync generation
 5. **FaceParsing** → Precise mouth region segmentation
-6. **GFPGAN** (Optional) → Face quality enhancement and upscaling
+6. **GPEN-BFR** (Optional) → Face quality enhancement with ONNX runtime
 
 ---
 
@@ -134,7 +135,7 @@ FACE DETECTION: 3017/3333 frames with faces
   ↓  
 AI PROCESSING: Only face frames (90% efficiency gain)
   ↓
-FACE ENHANCEMENT: GFPGAN quality improvement (optional)
+FACE ENHANCEMENT: GPEN-BFR quality improvement (optional)
   ↓
 COMPOSITION: Blend AI lips + original faces (elliptical mask)
   ↓
