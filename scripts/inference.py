@@ -188,13 +188,20 @@ def main(args):
             if os.path.exists(crop_coord_save_path) and args.use_saved_coord:
                 print("Using saved coordinates")
                 with open(crop_coord_save_path, 'rb') as f:
-                    coord_list = pickle.load(f)
+                    saved_data = pickle.load(f)
+                    # Handle both old format (just coords) and new format (coords + landmarks)
+                    if isinstance(saved_data, tuple) and len(saved_data) == 2:
+                        coord_list, landmarks_list = saved_data
+                    else:
+                        coord_list = saved_data
+                        landmarks_list = [None] * len(saved_data)  # No landmarks for old saves
                 frame_list = read_imgs(input_img_list)
             else:
                 print("Extracting landmarks... time-consuming operation")
-                coord_list, frame_list = get_landmark_and_bbox(input_img_list, bbox_shift)
+                coord_list, frame_list, landmarks_list = get_landmark_and_bbox(input_img_list, bbox_shift)
+                # Save both coordinates and landmarks for future use
                 with open(crop_coord_save_path, 'wb') as f:
-                    pickle.dump(coord_list, f)
+                    pickle.dump((coord_list, landmarks_list), f)
             
             print(f"Number of frames: {len(frame_list)}")         
             
@@ -323,7 +330,12 @@ def main(args):
                         try:
                             res_frame = cv2.resize(res_frame.astype(np.uint8), (x2-x1, y2-y1))
                             
-                            # Merge results with version-specific parameters  
+                            # Get landmarks for this frame (if available)
+                            frame_landmarks = None
+                            if landmarks_list and i < len(landmarks_list):
+                                frame_landmarks = landmarks_list[i%(len(landmarks_list))]
+                            
+                            # Merge results with version-specific parameters + surgical landmarks
                             if args.version == "v15":
                                 combine_frame = get_image(
                                     ori_frame, res_frame, [x1, y1, x2, y2], 
@@ -333,7 +345,9 @@ def main(args):
                                     fp=fp,
                                     use_elliptical_mask=args.use_elliptical_mask,
                                     ellipse_padding_factor=args.ellipse_padding_factor,
-                                    blur_kernel_ratio=args.blur_kernel_ratio
+                                    blur_kernel_ratio=args.blur_kernel_ratio,
+                                    landmarks=frame_landmarks,
+                                    mouth_vertical_offset=args.mouth_vertical_offset
                                 )
                             else:
                                 combine_frame = get_image(
@@ -343,7 +357,9 @@ def main(args):
                                     fp=fp,
                                     use_elliptical_mask=args.use_elliptical_mask,
                                     ellipse_padding_factor=args.ellipse_padding_factor,
-                                    blur_kernel_ratio=args.blur_kernel_ratio
+                                    blur_kernel_ratio=args.blur_kernel_ratio,
+                                    landmarks=frame_landmarks,
+                                    mouth_vertical_offset=args.mouth_vertical_offset
                                 )
                         except Exception as e:
                             print(f"Frame {i}: Processing failed, using passthrough - {e}")
@@ -475,6 +491,7 @@ if __name__ == "__main__":
     parser.add_argument("--expand_factor", type=float, default=1.5, help="Face crop expansion factor (larger = more context, 1.2-1.8)")
     parser.add_argument("--use_elliptical_mask", action="store_true", default=True, help="Use elliptical mask instead of rectangular (recommended)")
     parser.add_argument("--blur_kernel_ratio", type=float, default=0.05, help="Blur kernel size ratio for mask smoothing (0.02-0.08)")
+    parser.add_argument("--mouth_vertical_offset", type=float, default=0.0, help="Vertical offset for mouth positioning (positive = lower, negative = higher, -0.05 to +0.05)")
     
     # GPEN-BFR Face Enhancement Parameters
     parser.add_argument("--enable_gpen_bfr", action="store_true", help="Enable GPEN-BFR face enhancement")
