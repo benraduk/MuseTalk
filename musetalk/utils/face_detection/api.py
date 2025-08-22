@@ -5,6 +5,8 @@ from torch.utils.model_zoo import load_url
 from enum import Enum
 import numpy as np
 import cv2
+import math
+import onnxruntime as ort
 try:
     import urllib.request as request_file
 except BaseException:
@@ -92,16 +94,20 @@ class YOLOv8_face:
         self.iou_threshold = iou_thres
         self.class_names = ['face']
         self.num_classes = len(self.class_names)
-        # Initialize model
-        self.net = cv2.dnn.readNet(path)
-        self.input_height = 640
-        self.input_width = 640
-        self.reg_max = 16
-
-        self.project = np.arange(self.reg_max)
-        self.strides = (8, 16, 32)
-        self.feats_hw = [(math.ceil(self.input_height / self.strides[i]), math.ceil(self.input_width / self.strides[i])) for i in range(len(self.strides))]
-        self.anchors = self.make_anchors(self.feats_hw)
+        
+        # Initialize ONNX Runtime session
+        providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+        self.session = ort.InferenceSession(path, providers=providers)
+        
+        # Get model input details
+        self.input_name = self.session.get_inputs()[0].name
+        self.input_shape = self.session.get_inputs()[0].shape
+        self.input_height = self.input_shape[2] if len(self.input_shape) > 2 else 640
+        self.input_width = self.input_shape[3] if len(self.input_shape) > 3 else 640
+        
+        print(f"YOLOv8 model loaded: {path}")
+        print(f"Input shape: {self.input_shape}")
+        print(f"Providers: {self.session.get_providers()}")
 
     def make_anchors(self, feats_hw, grid_cell_offset=0.5):
         """Generate anchors from features."""
@@ -143,19 +149,18 @@ class YOLOv8_face:
         return img, newh, neww, top, left
 
     def detect(self, srcimg):
-        input_img, newh, neww, padh, padw = self.resize_image(cv2.cvtColor(srcimg, cv2.COLOR_BGR2RGB))
-        scale_h, scale_w = srcimg.shape[0]/newh, srcimg.shape[1]/neww
-        input_img = input_img.astype(np.float32) / 255.0
-
-        blob = cv2.dnn.blobFromImage(input_img)
-        self.net.setInput(blob)
-        outputs = self.net.forward(self.net.getUnconnectedOutLayersNames())
-        # if isinstance(outputs, tuple):
-        #     outputs = list(outputs)
-        # if float(cv2.__version__[:3])>=4.7:
-        #     outputs = [outputs[2], outputs[0], outputs[1]] ###opencv4.7需要这一步，opencv4.5不需要
-        # Perform inference on the image
-        det_bboxes, det_conf, det_classid, landmarks = self.post_process(outputs, scale_h, scale_w, padh, padw)
+        # Preprocess image
+        input_img = self.preprocess_image(srcimg)
+        
+        # Run inference
+        outputs = self.session.run(None, {self.input_name: input_img})
+        
+        # Post-process results
+        det_bboxes, det_conf, landmarks = self.postprocess_outputs(outputs, srcimg.shape)
+        
+        # Create dummy class IDs (all faces)
+        det_classid = np.zeros(len(det_bboxes), dtype=np.int32) if len(det_bboxes) > 0 else np.array([])
+        
         return det_bboxes, det_conf, det_classid, landmarks
 
     def post_process(self, preds, scale_h, scale_w, padh, padw):
@@ -236,5 +241,127 @@ class YOLOv8_face:
                 cv2.circle(image, (int(kp[i * 3]), int(kp[i * 3 + 1])), 4, (0, 255, 0), thickness=-1)
                 # cv2.putText(image, str(i), (int(kp[i * 3]), int(kp[i * 3 + 1]) - 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), thickness=1)
         return image
+    
+    def preprocess_image(self, image):
+        """Preprocess image for ONNX model (FaceFusion style)"""
+        # Step 1: Restrict frame (resize while maintaining aspect ratio)
+        temp_vision_frame = self._restrict_frame(image, (self.input_width, self.input_height))
+        
+        # Calculate ratios for coordinate scaling
+        self.ratio_height = image.shape[0] / temp_vision_frame.shape[0]
+        self.ratio_width = image.shape[1] / temp_vision_frame.shape[1]
+        
+        # Step 2: Prepare detect frame (pad to exact size)
+        detect_vision_frame = self._prepare_detect_frame(temp_vision_frame)
+        
+        # Step 3: Normalize (0-1 range)
+        detect_vision_frame = self._normalize_detect_frame(detect_vision_frame, [0, 1])
+        
+        return detect_vision_frame
+    
+    def _restrict_frame(self, vision_frame, target_resolution):
+        """Restrict frame size while maintaining aspect ratio"""
+        target_width, target_height = target_resolution
+        height, width = vision_frame.shape[:2]
+        
+        # Calculate scale to fit within target resolution
+        scale = min(target_width / width, target_height / height)
+        
+        if scale < 1.0:
+            new_width = int(width * scale)
+            new_height = int(height * scale)
+            vision_frame = cv2.resize(vision_frame, (new_width, new_height), interpolation=cv2.INTER_AREA)
+        
+        return vision_frame
+    
+    def _prepare_detect_frame(self, temp_vision_frame):
+        """Prepare detect frame by padding to exact size"""
+        detect_vision_frame = np.zeros((self.input_height, self.input_width, 3), dtype=np.uint8)
+        detect_vision_frame[:temp_vision_frame.shape[0], :temp_vision_frame.shape[1], :] = temp_vision_frame
+        detect_vision_frame = np.expand_dims(detect_vision_frame.transpose(2, 0, 1), axis=0).astype(np.float32)
+        return detect_vision_frame
+    
+    def _normalize_detect_frame(self, detect_vision_frame, normalize_range):
+        """Normalize detect frame"""
+        if normalize_range == [0, 1]:
+            return detect_vision_frame / 255.0
+        elif normalize_range == [-1, 1]:
+            return (detect_vision_frame - 127.5) / 128.0
+        return detect_vision_frame
+    
+    def postprocess_outputs(self, outputs, original_shape):
+        """Post-process ONNX model outputs (FaceFusion style)"""
+        bounding_boxes = []
+        face_scores = []
+        face_landmarks_5 = []
+        
+        if len(outputs) == 0:
+            return np.array([]), np.array([]), np.array([])
+        
+        # Get the main output: shape should be (1, 20, 8400)
+        detection = outputs[0]
+        detection = np.squeeze(detection).T  # Remove batch dim and transpose: (8400, 20)
+        
+        # Split into components: [x, y, w, h, conf, ...landmarks...]
+        bounding_boxes_raw, face_scores_raw, face_landmarks_5_raw = np.split(detection, [4, 5], axis=1)
+        
+        # Filter by confidence threshold
+        keep_indices = np.where(face_scores_raw.ravel() > self.conf_threshold)[0]
+        
+        if len(keep_indices) > 0:
+            bounding_boxes_raw = bounding_boxes_raw[keep_indices]
+            face_scores_raw = face_scores_raw[keep_indices]
+            face_landmarks_5_raw = face_landmarks_5_raw[keep_indices]
+            
+            # Process bounding boxes (convert from center format to corner format)
+            for bounding_box_raw in bounding_boxes_raw:
+                # Coordinates are already in pixels, scale them back to original image
+                x_center, y_center, width, height = bounding_box_raw
+                
+                # Convert to corner format and scale to original image
+                x1 = (x_center - width / 2) * self.ratio_width
+                y1 = (y_center - height / 2) * self.ratio_height
+                x2 = (x_center + width / 2) * self.ratio_width
+                y2 = (y_center + height / 2) * self.ratio_height
+                
+                bounding_boxes.append(np.array([x1, y1, x2, y2]))
+            
+            # Process face scores
+            face_scores = face_scores_raw.ravel().tolist()
+            
+            # Process landmarks (5 points * 3 values = 15 values)
+            face_landmarks_5_raw[:, 0::3] = face_landmarks_5_raw[:, 0::3] * self.ratio_width  # x coordinates
+            face_landmarks_5_raw[:, 1::3] = face_landmarks_5_raw[:, 1::3] * self.ratio_height  # y coordinates
+            
+            for face_landmark_raw_5 in face_landmarks_5_raw:
+                # Reshape to (5, 3) and take only x,y coordinates (ignore confidence)
+                landmarks = face_landmark_raw_5.reshape(-1, 3)[:, :2]
+                face_landmarks_5.append(landmarks)
+        
+        return np.array(bounding_boxes), np.array(face_scores), np.array(face_landmarks_5)
+    
+    def get_detections_for_batch(self, frames):
+        """SFD-compatible batch detection interface"""
+        results = []
+        for frame in frames:
+            det_bboxes, det_conf, det_classid, landmarks = self.detect(frame)
+            if len(det_bboxes) > 0 and len(det_conf) > 0 and det_conf[0] > self.conf_threshold:
+                # det_bboxes are already in xyxy format from postprocess_outputs
+                bbox = det_bboxes[0]
+                # Convert numpy array to tuple of integers for pipeline compatibility
+                bbox_tuple = (int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]))
+                results.append(bbox_tuple)
+            else:
+                results.append(None)
+        return results
+
+    def _convert_to_xyxy(self, bbox_xywh):
+        """Convert YOLOv8 xywh format to SFD xyxy format"""
+        cx, cy, w, h = bbox_xywh
+        x1 = cx - w/2
+        y1 = cy - h/2
+        x2 = cx + w/2
+        y2 = cy + h/2
+        return (x1, y1, x2, y2)
     
 ROOT = os.path.dirname(os.path.abspath(__file__))

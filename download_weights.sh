@@ -57,7 +57,7 @@ curl -L "https://github.com/facefusion/facefusion-assets/releases/download/model
 
 # Download YOLOv8 Face Detection ONNX model
 echo "📥 Downloading YOLOv8 Face Detection model..."
-curl -L "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/yolov8n_face.onnx" \
-  -o $CheckpointsDir/face_detection/weights/yolov8n-face.onnx
+curl -L "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/yoloface_8n.onnx" \
+  -o $CheckpointsDir/face_detection/weights/yoloface_8n.onnx
 
 echo "✅ All weights have been downloaded successfully!" 

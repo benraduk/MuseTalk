@@ -12,7 +12,30 @@ from tqdm import tqdm
 
 # Initialize face detection model (core MuseTalk functionality)
 device = "cuda" if torch.cuda.is_available() else "cpu"
-fa = FaceAlignment(LandmarksType._2D, flip_input=False, device=device)
+
+# Try to use YOLOv8 first, fallback to SFD if it fails
+use_yolo = True  # Set to False to force SFD usage
+fa = None
+
+if use_yolo:
+    try:
+        from .face_detection.api import YOLOv8_face
+        model_path = 'models/face_detection/weights/yolov8n-face.onnx'
+        if os.path.exists(model_path):
+            fa = YOLOv8_face(path=model_path, conf_thres=0.5)
+            print("🚀 Using YOLOv8 face detection")
+        else:
+            print(f"⚠️ YOLOv8 model not found at {model_path}")
+            raise FileNotFoundError("YOLOv8 model not available")
+    except Exception as e:
+        print(f"⚠️ YOLOv8 failed to load: {e}")
+        print("🔄 Falling back to SFD face detection")
+        fa = None
+
+# Fallback to SFD if YOLOv8 failed
+if fa is None:
+    fa = FaceAlignment(LandmarksType._2D, flip_input=False, device=device)
+    print("🔧 Using SFD face detection")
 
 # maker if the bbox is not sufficient 
 coord_placeholder = (0.0,0.0,0.0,0.0)
