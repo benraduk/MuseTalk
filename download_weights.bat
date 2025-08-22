@@ -14,6 +14,8 @@ mkdir %CheckpointsDir%\face-parse-bisent
 mkdir %CheckpointsDir%\sd-vae-ft-mse
 mkdir %CheckpointsDir%\whisper
 mkdir %CheckpointsDir%\gpen_bfr
+mkdir %CheckpointsDir%\face_detection
+mkdir %CheckpointsDir%\face_detection\weights
 
 :: Install required packages
 pip install -U "huggingface_hub[cli]"
@@ -23,19 +25,19 @@ pip install gdown
 set HF_ENDPOINT=https://hf-mirror.com
 
 :: Download MuseTalk weights
-huggingface-cli download TMElyralab/MuseTalk --local-dir %CheckpointsDir%
+hf download TMElyralab/MuseTalk --local-dir %CheckpointsDir%
 
 :: Download SD VAE weights
-huggingface-cli download stabilityai/sd-vae-ft-mse --local-dir %CheckpointsDir%\sd-vae --include "config.json" "diffusion_pytorch_model.bin"
+hf download stabilityai/sd-vae-ft-mse --local-dir %CheckpointsDir%\sd-vae --include "config.json" "diffusion_pytorch_model.bin"
 
 :: Download Whisper weights
-huggingface-cli download openai/whisper-tiny --local-dir %CheckpointsDir%\whisper --include "config.json" "pytorch_model.bin" "preprocessor_config.json"
+hf download openai/whisper-tiny --local-dir %CheckpointsDir%\whisper --include "config.json" "pytorch_model.bin" "preprocessor_config.json"
 
 :: Download DWPose weights
-huggingface-cli download yzd-v/DWPose --local-dir %CheckpointsDir%\dwpose --include "dw-ll_ucoco_384.pth"
+hf download yzd-v/DWPose --local-dir %CheckpointsDir%\dwpose --include "dw-ll_ucoco_384.pth"
 
 :: Download SyncNet weights
-huggingface-cli download ByteDance/LatentSync --local-dir %CheckpointsDir%\syncnet --include "latentsync_syncnet.pt"
+hf download ByteDance/LatentSync --local-dir %CheckpointsDir%\syncnet --include "latentsync_syncnet.pt"
 
 
 
@@ -48,6 +50,10 @@ curl -L https://download.pytorch.org/models/resnet18-5c106cde.pth -o %Checkpoint
 :: Download GPEN-BFR models
 echo Downloading GPEN-BFR models...
 curl -L "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/gpen_bfr_256.onnx" -o %CheckpointsDir%\gpen_bfr\gpen_bfr_256.onnx
+
+:: Download YOLOv8 Face Detection ONNX model
+echo Downloading YOLOv8 Face Detection model...
+curl -L "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/yolov8n_face.onnx" -o %CheckpointsDir%\face_detection\weights\yolov8n-face.onnx
 
 echo All weights have been downloaded successfully!
 endlocal 
