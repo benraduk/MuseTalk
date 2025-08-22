@@ -4,7 +4,7 @@
 CheckpointsDir="models"
 
 # Create necessary directories
-mkdir -p models/musetalk models/musetalkV15 models/syncnet models/dwpose models/face-parse-bisent models/sd-vae models/whisper
+mkdir -p models/musetalk models/musetalkV15 models/syncnet models/dwpose models/face-parse-bisent models/sd-vae models/whisper models/gpen_bfr
 
 # Install required packages
 pip install -U "huggingface_hub[cli]"
@@ -49,5 +49,10 @@ huggingface-cli download ByteDance/LatentSync \
 gdown --id 154JgKpzCPW82qINcVieuPH3fZ2e0P812 -O $CheckpointsDir/face-parse-bisent/79999_iter.pth
 curl -L https://download.pytorch.org/models/resnet18-5c106cde.pth \
   -o $CheckpointsDir/face-parse-bisent/resnet18-5c106cde.pth
+
+# Download GPEN-BFR models
+echo "📥 Downloading GPEN-BFR models..."
+curl -L "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/gpen_bfr_256.onnx" \
+  -o $CheckpointsDir/gpen_bfr/gpen_bfr_256.onnx
 
 echo "✅ All weights have been downloaded successfully!" 

@@ -63,12 +63,22 @@ for frame in video_frames:
 - **VAE Decoding**: Converts latents back to images
 - **Handles Mixed Batches**: Process + passthrough frames together
 
+### 6.5. 🎨 Face Enhancement (Optional - GPEN-BFR)
+**Script**: `scripts/inference.py` (lines 258-274, after VAE decoding)
+- **Quality Enhancement**: Uses GPEN-BFR to improve AI-generated face quality
+- **ONNX Runtime**: Stable, fast inference with GPU acceleration
+- **Artifact Reduction**: Removes VAE decoding artifacts and improves realism
+- **Configurable Enhancement**: Multiple presets (CONSERVATIVE, NATURAL, QUALITY_FOCUSED, etc.)
+- **Fallback System**: Continues with original VAE output if enhancement fails
+- **GPU Acceleration**: Leverages CUDA for optimal performance
+
 ### 7. 🎨 Frame Composition & Blending
 **Script**: `scripts/inference.py` (lines 245-275)
 - **Face Blending**: `musetalk/utils/blending.py` → `get_image()`
 - **Face Parsing**: Uses `FaceParsing` class for precise mouth region
+- **Elliptical Masking**: Applies elliptical mask instead of rectangular for natural blending
 - **Smart Composition**:
-  - ✅ **Processed frames**: Blend AI-generated lips with original face
+  - ✅ **Processed frames**: Blend AI-generated lips with original face using elliptical mask
   - ❌ **Passthrough frames**: Use original frame unchanged
 - **Error Handling**: Falls back to original frame if blending fails
 
@@ -102,6 +112,7 @@ for frame in video_frames:
 3. **VAE** → Image encoding/decoding
 4. **UNet** → Lip-sync generation
 5. **FaceParsing** → Precise mouth region segmentation
+6. **GPEN-BFR** (Optional) → Face quality enhancement with ONNX runtime
 
 ---
 
@@ -124,7 +135,9 @@ FACE DETECTION: 3017/3333 frames with faces
   ↓  
 AI PROCESSING: Only face frames (90% efficiency gain)
   ↓
-COMPOSITION: Blend AI lips + original faces
+FACE ENHANCEMENT: GPEN-BFR quality improvement (optional)
+  ↓
+COMPOSITION: Blend AI lips + original faces (elliptical mask)
   ↓
 OUTPUT: lip_synced_video.mp4
 ```
@@ -143,6 +156,12 @@ OUTPUT: lip_synced_video.mp4
 - **Innovation**: Only process frames containing faces
 - **Efficiency**: ~90% reduction in unnecessary AI inference
 - **Quality**: Perfect video continuity with passthrough frames
+
+### Face Enhancement Integration
+- **GFPGAN Support**: Optional face quality enhancement after AI inference
+- **Elliptical Masking**: Natural face blending using elliptical masks instead of rectangular
+- **Quality Boost**: Improved lip texture, reduced artifacts, better realism
+- **Flexible Configuration**: Can be enabled/disabled via configuration
 
 ---
 
@@ -175,6 +194,12 @@ task_0:
   video_path: "data/video/your_video.mp4"
   audio_path: "data/audio/your_audio.wav"
   bbox_shift: 0
+
+# Optional GFPGAN enhancement
+gfpgan:
+  enabled: false  # Set to true to enable
+  upscale: 2      # 1, 2, or 4
+  model_path: "models/gfpgan/GFPGANv1.4.pth"
 ```
 
 ---

@@ -13,6 +13,7 @@ mkdir %CheckpointsDir%\dwpose
 mkdir %CheckpointsDir%\face-parse-bisent
 mkdir %CheckpointsDir%\sd-vae-ft-mse
 mkdir %CheckpointsDir%\whisper
+mkdir %CheckpointsDir%\gpen_bfr
 
 :: Install required packages
 pip install -U "huggingface_hub[cli]"
@@ -43,6 +44,10 @@ gdown --id 154JgKpzCPW82qINcVieuPH3fZ2e0P812 -O %CheckpointsDir%\face-parse-bise
 
 :: Download ResNet weights
 curl -L https://download.pytorch.org/models/resnet18-5c106cde.pth -o %CheckpointsDir%\face-parse-bisent\resnet18-5c106cde.pth
+
+:: Download GPEN-BFR models
+echo Downloading GPEN-BFR models...
+curl -L "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/gpen_bfr_256.onnx" -o %CheckpointsDir%\gpen_bfr\gpen_bfr_256.onnx
 
 echo All weights have been downloaded successfully!
 endlocal 

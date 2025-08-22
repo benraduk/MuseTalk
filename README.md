@@ -10,6 +10,7 @@ BraivTalk addresses critical limitations in the original MuseTalk by focusing on
 
 - **🎬 Cutaway Handling**: Seamlessly processes videos with face transitions, cutaways, and non-face frames
 - **🔄 Frame Continuity**: Prevents video freezing when faces disappear from frame
+- **🎨 Face Enhancement**: GPEN-BFR integration for superior AI-generated face quality
 - **⚡ GPU Optimization**: Configurable batch processing for efficient hardware utilization
 - **🛡️ Reliability**: Robust preprocessing and error handling for production use
 - **🎵 Audio Sync**: Perfect audio-visual synchronization throughout entire videos
@@ -63,12 +64,24 @@ chmod +x download_weights.sh
 ### **3. Quick Test**
 
 ```bash
+# Basic inference
 python -m scripts.inference \
   --inference_config configs/inference/test.yaml \
   --result_dir results/test \
   --unet_model_path models/musetalkV15/unet.pth \
   --unet_config models/musetalkV15/musetalk.json \
   --version v15 \
+  --ffmpeg_path ffmpeg-master-latest-win64-gpl-shared/bin
+
+# With face enhancement (recommended)
+python -m scripts.inference \
+  --inference_config configs/inference/test.yaml \
+  --result_dir results/test_enhanced \
+  --unet_model_path models/musetalkV15/unet.pth \
+  --unet_config models/musetalkV15/musetalk.json \
+  --version v15 \
+  --enable_gpen_bfr \
+  --gpen_bfr_config CONSERVATIVE \
   --ffmpeg_path ffmpeg-master-latest-win64-gpl-shared/bin
 ```
 
@@ -88,6 +101,13 @@ Access the web interface at `http://localhost:7860`
 - **Continuous Processing**: Video never freezes or gets stuck on missing faces
 - **Smart Batching**: Processes face frames efficiently while bypassing others
 
+### **GPEN-BFR Face Enhancement**
+- **ONNX Runtime**: Stable, fast inference with GPU acceleration
+- **Quality Improvement**: 3x+ sharpness enhancement with natural results
+- **Configurable Presets**: CONSERVATIVE, NATURAL, QUALITY_FOCUSED, and more
+- **Perfect Integration**: Seamlessly processes 256x256 VAE-decoded faces
+- **Clean Output**: Professional warning suppression for production use
+
 ### **Optimized Performance**
 - **Configurable Batch Sizes**: Adjustable for different GPU capabilities
 - **Memory Management**: Conservative settings prevent system crashes
@@ -105,7 +125,7 @@ Access the web interface at `http://localhost:7860`
 ```
 braivtalk/
 ├── scripts/
-│   ├── inference.py              # Main inference with cutaway handling
+│   ├── inference.py              # Main inference with cutaway handling + GPEN-BFR
 │   ├── preprocess.py             # Enhanced preprocessing
 │   └── realtime_inference.py     # Real-time processing
 ├── musetalk/
@@ -115,12 +135,18 @@ braivtalk/
 │   │   ├── utils.py              # Data generation with passthrough support
 │   │   └── blending.py           # Image composition
 │   └── whisper/                  # Audio feature extraction
+├── face-enhancers/
+│   ├── gpen_bfr_enhancer.py      # GPEN-BFR face enhancement wrapper
+│   ├── gpen_bfr_parameter_configs.py # Enhancement presets
+│   └── test_gpen_bfr_*.py        # Testing and verification scripts
 ├── configs/
 │   └── inference/                # Configuration files
 ├── data/
 │   ├── video/                    # Input videos
 │   └── audio/                    # Input audio files
-├── models/                       # Downloaded model weights
+├── models/
+│   ├── gpen_bfr/                 # GPEN-BFR ONNX models
+│   └── [other models]/           # Downloaded model weights
 └── results/                      # Generated outputs
 ```
 
@@ -132,7 +158,8 @@ braivtalk/
 |------|-------------|---------|
 | `musetalk/utils/preprocessing.py` | Face detection optimization | Handles cutaway frames gracefully |
 | `musetalk/utils/utils.py` | Enhanced data generation | Supports both processing and passthrough |
-| `scripts/inference.py` | Cutaway handling logic | Main inference with frame continuity |
+| `scripts/inference.py` | Cutaway handling + GPEN-BFR | Main inference with frame continuity and face enhancement |
+| `face-enhancers/gpen_bfr_enhancer.py` | ONNX face enhancement | GPEN-BFR wrapper with configurable presets |
 | `app.py` | Web interface updates | Gradio interface with enhanced pipeline |
 
 ### **Development Setup**
@@ -201,6 +228,9 @@ batch_size_fa = 2
 - [x] Cutaway frame detection and handling
 - [x] Enhanced preprocessing with face detection
 - [x] Passthrough frame processing
+- [x] GPEN-BFR face enhancement integration
+- [x] Configurable enhancement presets (CONSERVATIVE, NATURAL, etc.)
+- [x] ONNX Runtime optimization with warning suppression
 - [x] GPU batch optimization
 - [x] FFmpeg integration fixes
 - [x] Cross-platform compatibility
@@ -213,12 +243,12 @@ batch_size_fa = 2
 - [ ] Multi-speaker support
 
 ### **📋 Planned Features**
-- [ ] Video quality enhancement
 - [ ] Advanced audio processing
 - [ ] Batch video processing
 - [ ] API endpoints
 - [ ] Docker containerization
 - [ ] Model fine-tuning tools
+- [ ] Additional face enhancement models (CodeFormer, RestoreFormer++)
 
 ## 🐛 **Troubleshooting**
 
@@ -245,8 +275,16 @@ batch_size_fa = 2
 - ✅ Fixed: Improved FFmpeg command handling
 - Ensure input audio and video have matching durations
 
+**GPEN-BFR enhancement not working**
+- Verify ONNX Runtime installation: `python -c "import onnxruntime; print('OK')"`
+- Check model download: Ensure `models/gpen_bfr/gpen_bfr_256.onnx` exists
+- Test setup: `python face-enhancers/test_gpen_bfr_setup.py`
+- Use `--gpen_bfr_config CONSERVATIVE` for best results
+
 ## 📚 **Documentation**
 
+- **[Face Enhancement Guide](face-enhancers/README.md)** - GPEN-BFR setup and usage
+- **[Pipeline Overview](pipeline.md)** - Complete processing pipeline
 - **[Dependency Tree](diagrams/02_dependency_tree.mmd)** - Project dependencies
 - **[Code Structure](diagrams/03_code_structure.mmd)** - Architecture overview
 - **[Diagrams](diagrams/)** - Technical documentation
@@ -274,5 +312,6 @@ This project builds upon MuseTalk and maintains compatibility with its licensing
 
 ---
 
-*BraivTalk - Enhanced MuseTalk v2.0.0*  
-*Last updated: January 2025*
+*BraivTalk - Enhanced MuseTalk v2.1.0*  
+*Last updated: January 2025*  
+*New in v2.1.0: GPEN-BFR Face Enhancement Integration*
