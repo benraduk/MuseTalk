@@ -20,7 +20,7 @@ REM Run OPTIMIZED inference with optimized settings
 echo ⚡ Running with optimized settings for maximum speed...
 echo 📊 Batch size: 16 (AI inference optimization)
 echo 📁 Output directory: ./results/optimized/
-python scripts/inference.py --enable_gpen_bfr --inference_config configs/inference/test.yaml --unet_config ./models/musetalkV15/musetalk.json --batch_size 16 --result_dir "./results/optimized"
+python scripts/inference.py --enable_gpen_bfr --inference_config configs/inference/test.yaml --unet_config ./models/musetalkV15/musetalk.json --batch_size 16 --result_dir "./results"
 
 REM Restore original directory
 echo ============================================================

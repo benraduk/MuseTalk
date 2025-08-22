@@ -336,6 +336,11 @@ def main(args):
                                 frame_landmarks = landmarks_list[i%(len(landmarks_list))]
                             
                             # Merge results with version-specific parameters + surgical landmarks
+                            # Setup debug output directory if requested
+                            debug_output_dir = None
+                            if args.debug_mouth_mask:
+                                debug_output_dir = os.path.join(result_img_save_path, "debug_mouth_masks")
+                            
                             if args.version == "v15":
                                 combine_frame = get_image(
                                     ori_frame, res_frame, [x1, y1, x2, y2], 
@@ -347,7 +352,14 @@ def main(args):
                                     ellipse_padding_factor=args.ellipse_padding_factor,
                                     blur_kernel_ratio=args.blur_kernel_ratio,
                                     landmarks=frame_landmarks,
-                                    mouth_vertical_offset=args.mouth_vertical_offset
+                                    mouth_vertical_offset=args.mouth_vertical_offset,
+                                    mouth_scale_factor=args.mouth_scale_factor,
+                                    debug_mouth_mask=args.debug_mouth_mask,
+                                    debug_frame_idx=i,
+                                    debug_output_dir=debug_output_dir,
+                                    mask_shape=args.mask_shape,
+                                    mask_height_ratio=args.mask_height_ratio,
+                                    mask_corner_radius=args.mask_corner_radius
                                 )
                             else:
                                 combine_frame = get_image(
@@ -359,7 +371,14 @@ def main(args):
                                     ellipse_padding_factor=args.ellipse_padding_factor,
                                     blur_kernel_ratio=args.blur_kernel_ratio,
                                     landmarks=frame_landmarks,
-                                    mouth_vertical_offset=args.mouth_vertical_offset
+                                    mouth_vertical_offset=args.mouth_vertical_offset,
+                                    mouth_scale_factor=args.mouth_scale_factor,
+                                    debug_mouth_mask=args.debug_mouth_mask,
+                                    debug_frame_idx=i,
+                                    debug_output_dir=debug_output_dir,
+                                    mask_shape=args.mask_shape,
+                                    mask_height_ratio=args.mask_height_ratio,
+                                    mask_corner_radius=args.mask_corner_radius
                                 )
                         except Exception as e:
                             print(f"Frame {i}: Processing failed, using passthrough - {e}")
@@ -492,6 +511,11 @@ if __name__ == "__main__":
     parser.add_argument("--use_elliptical_mask", action="store_true", default=True, help="Use elliptical mask instead of rectangular (recommended)")
     parser.add_argument("--blur_kernel_ratio", type=float, default=0.05, help="Blur kernel size ratio for mask smoothing (0.02-0.08)")
     parser.add_argument("--mouth_vertical_offset", type=float, default=0.0, help="Vertical offset for mouth positioning (positive = lower, negative = higher, -0.05 to +0.05)")
+    parser.add_argument("--mouth_scale_factor", type=float, default=1.0, help="Scale factor for mouth size matching (1.0 = exact YOLOv8 size, 1.1-1.3 = larger for better coverage)")
+    parser.add_argument("--debug_mouth_mask", action="store_true", help="Save debug outputs: isolated AI mouth, mask, and overlay visualization")
+    parser.add_argument("--mask_shape", type=str, default="ellipse", choices=["ellipse", "triangle", "rounded_triangle", "wide_ellipse", "dynamic_contour"], help="Shape of the blending mask (ellipse, triangle, rounded_triangle, wide_ellipse, dynamic_contour)")
+    parser.add_argument("--mask_height_ratio", type=float, default=0.4, help="Height ratio for mask relative to mouth width (0.3-0.8, higher = taller mask)")
+    parser.add_argument("--mask_corner_radius", type=float, default=0.2, help="Corner radius for rounded shapes (0.0-0.5, 0.0 = sharp, 0.5 = very round)")
     
     # GPEN-BFR Face Enhancement Parameters
     parser.add_argument("--enable_gpen_bfr", action="store_true", help="Enable GPEN-BFR face enhancement")
