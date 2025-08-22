@@ -296,8 +296,27 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
         combined_mask = np.minimum(mouth_array, mask_small_array)
         final_face_mask = Image.fromarray(combined_mask)
         
-        # Paste the surgical landmark-based mask
-        mask_image.paste(final_face_mask, (x - x_s, y - y_s))
+        # Paste the surgical landmark-based mask with bounds checking
+        paste_x = x - x_s
+        paste_y = y - y_s
+        
+        # Ensure paste coordinates are valid
+        if paste_x >= 0 and paste_y >= 0:
+            # Check if the mask fits within the target image
+            target_w, target_h = mask_image.size
+            mask_w, mask_h = final_face_mask.size
+            
+            if paste_x + mask_w <= target_w and paste_y + mask_h <= target_h:
+                mask_image.paste(final_face_mask, (paste_x, paste_y))
+            else:
+                # Crop the mask to fit if it's too large
+                crop_w = min(mask_w, target_w - paste_x)
+                crop_h = min(mask_h, target_h - paste_y)
+                if crop_w > 0 and crop_h > 0:
+                    cropped_mask = final_face_mask.crop((0, 0, crop_w, crop_h))
+                    mask_image.paste(cropped_mask, (paste_x, paste_y))
+        else:
+            print(f"⚠️ Warning: Invalid paste coordinates ({paste_x}, {paste_y}) - skipping mask paste")
         
         offset_info = f", offset {mouth_vertical_offset:+.2f}" if mouth_vertical_offset != 0.0 else ""
         scale_info = f", scale {mouth_scale_factor:.2f}" if mouth_scale_factor != 1.0 else ""
@@ -325,13 +344,45 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
         combined_mask = np.minimum(ellipse_array, mask_small_array)
         final_face_mask = Image.fromarray(combined_mask)
         
-        # Paste the combined elliptical + parsing mask
-        mask_image.paste(final_face_mask, (x - x_s, y - y_s))
+        # Paste the combined elliptical + parsing mask with bounds checking
+        paste_x = x - x_s
+        paste_y = y - y_s
+        
+        # Ensure paste coordinates are valid
+        if paste_x >= 0 and paste_y >= 0:
+            # Check if the mask fits within the target image
+            target_w, target_h = mask_image.size
+            mask_w, mask_h = final_face_mask.size
+            
+            if paste_x + mask_w <= target_w and paste_y + mask_h <= target_h:
+                mask_image.paste(final_face_mask, (paste_x, paste_y))
+            else:
+                # Crop the mask to fit if it's too large
+                crop_w = min(mask_w, target_w - paste_x)
+                crop_h = min(mask_h, target_h - paste_y)
+                if crop_w > 0 and crop_h > 0:
+                    cropped_mask = final_face_mask.crop((0, 0, crop_w, crop_h))
+                    mask_image.paste(cropped_mask, (paste_x, paste_y))
+        else:
+            print(f"⚠️ Warning: Invalid paste coordinates ({paste_x}, {paste_y}) - skipping elliptical mask paste")
         
         print(f"🔧 Fallback: elliptical mask (no landmarks available)")
     else:
-        # Original rectangular mask behavior
-        mask_image.paste(mask_small, (x - x_s, y - y_s, x1 - x_s, y1 - y_s))  # 将面部掩码粘贴到全黑图像上
+        # Original rectangular mask behavior with bounds checking
+        paste_x = x - x_s
+        paste_y = y - y_s
+        paste_x1 = x1 - x_s
+        paste_y1 = y1 - y_s
+        
+        # Ensure paste coordinates are valid
+        if paste_x >= 0 and paste_y >= 0 and paste_x1 > paste_x and paste_y1 > paste_y:
+            target_w, target_h = mask_image.size
+            if paste_x1 <= target_w and paste_y1 <= target_h:
+                mask_image.paste(mask_small, (paste_x, paste_y, paste_x1, paste_y1))
+            else:
+                print(f"⚠️ Warning: Rectangular mask bounds ({paste_x}, {paste_y}, {paste_x1}, {paste_y1}) exceed target size ({target_w}, {target_h})")
+        else:
+            print(f"⚠️ Warning: Invalid rectangular mask coordinates ({paste_x}, {paste_y}, {paste_x1}, {paste_y1}) - skipping mask paste")
         print(f"📦 Basic: rectangular mask")
     
     
@@ -369,8 +420,35 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
         cv2.imwrite(f"{debug_output_dir}/frame_{debug_frame_idx:06d}_original_face.png", original_face_region)
         
         # Create a visualization showing the mask overlay
-        mask_colored = cv2.applyColorMap(mask_debug, cv2.COLORMAP_JET)
+        # Create a full-size mask for visualization
         original_full = np.array(body)[:, :, ::-1]  # Full original image
+        full_mask = np.zeros((original_full.shape[0], original_full.shape[1]), dtype=np.uint8)
+        
+        # Place the mask in the correct position on the full image
+        x_s, y_s, x_e, y_e = crop_box
+        mask_h, mask_w = mask_debug.shape
+        
+        # Ensure coordinates are within bounds
+        img_h, img_w = original_full.shape[:2]
+        y_start = max(0, y_s)
+        x_start = max(0, x_s)
+        y_end = min(img_h, y_s + mask_h)
+        x_end = min(img_w, x_s + mask_w)
+        
+        # Calculate the corresponding mask region
+        mask_y_start = max(0, -y_s)
+        mask_x_start = max(0, -x_s)
+        mask_y_end = mask_y_start + (y_end - y_start)
+        mask_x_end = mask_x_start + (x_end - x_start)
+        
+        # Only assign if we have valid regions
+        if y_end > y_start and x_end > x_start and mask_y_end > mask_y_start and mask_x_end > mask_x_start:
+            full_mask[y_start:y_end, x_start:x_end] = mask_debug[mask_y_start:mask_y_end, mask_x_start:mask_x_end]
+        
+        # Apply colormap to the full-size mask
+        mask_colored = cv2.applyColorMap(full_mask, cv2.COLORMAP_JET)
+        
+        # Now both images have the same dimensions
         overlay_vis = cv2.addWeighted(original_full, 0.7, mask_colored, 0.3, 0)
         cv2.imwrite(f"{debug_output_dir}/frame_{debug_frame_idx:06d}_mask_overlay.png", overlay_vis)
         

@@ -2,23 +2,24 @@ task_0:
  video_path: "data/video/Canva_en_short.mp4"
  audio_path: "data/audio/Canva_FR_short.m4a"
  result_name: "Canva_en_6pad.mp4"
- result_dir: "./results/enhanced"
+ result_dir: "./results"
+ bbox_shift: 7
  
- # 🎯 YOLOv8 Surgical Mouth Positioning Parameters
- ellipse_padding_factor: 0.05      # Larger mask coverage (0.06-0.15, smaller = larger coverage)
- upper_boundary_ratio: 0.3         # More face coverage (0.3-0.7, smaller = more coverage)
- expand_factor: 1.7                # Face crop expansion (1.2-1.8, larger = more context)
+ # 🎯 YOLOv8 Surgical Mouth Positioning Parameters - MAXIMUM COVERAGE
+ ellipse_padding_factor: 0.03      # MAXIMUM coverage (smaller = larger coverage)
+ upper_boundary_ratio: 0.25        # MORE face coverage (smaller = more coverage)  
+ expand_factor: 1.8                # Maximum face crop expansion
  use_elliptical_mask: true         # Use elliptical mask (recommended)
  blur_kernel_ratio: 0.08           # Mask smoothing (0.02-0.08)
  
- # 🎯 Precise Mouth Positioning & Sizing
+ # 🎯 Precise Mouth Positioning & Sizing - ENHANCED
  mouth_vertical_offset: 0.02       # Vertical mouth position (+0.02 = lower, -0.02 = higher)
- mouth_scale_factor: 1.3           # Mouth size scaling (1.0 = exact, 1.1-1.3 = larger for better coverage)
+ mouth_scale_factor: 1.4           # LARGER mouth scaling for better coverage
  
- # 🎨 Advanced Mask Shape Options
- mask_shape: "wide_ellipse"             # Shape: ellipse, wide_ellipse, triangle, rounded_triangle
- mask_height_ratio: 0.8            # Mask height relative to width (0.3-0.8, higher = taller)
+ # 🎨 Advanced Mask Shape Options - MAXIMUM HEIGHT
+ mask_shape: "wide_ellipse"        # Shape: ellipse, wide_ellipse, triangle, rounded_triangle
+ mask_height_ratio: 0.9            # MAXIMUM height ratio (taller mask)
  mask_corner_radius: 0.2           # Corner rounding for rounded shapes (0.0-0.5)
  
  # 🔍 Debug Options
- debug_mouth_mask: false           # Save debug outputs for troubleshooting
+ debug_mouth_mask: false            # Enable debug outputs for troubleshooting

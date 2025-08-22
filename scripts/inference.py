@@ -121,16 +121,31 @@ def main(args):
     for task_id in inference_config:
         try:
             # Get task configuration
-            video_path = inference_config[task_id]["video_path"]
-            audio_path = inference_config[task_id]["audio_path"]
-            if "result_name" in inference_config[task_id]:
-                args.output_vid_name = inference_config[task_id]["result_name"]
+            task_config = inference_config[task_id]
+            video_path = task_config["video_path"]
+            audio_path = task_config["audio_path"]
+            if "result_name" in task_config:
+                args.output_vid_name = task_config["result_name"]
+            
+            # 🎯 MERGE YAML PARAMETERS WITH COMMAND LINE ARGUMENTS
+            # Override args with YAML config values if they exist
+            mouth_params = [
+                'ellipse_padding_factor', 'upper_boundary_ratio', 'expand_factor', 
+                'use_elliptical_mask', 'blur_kernel_ratio', 'mouth_vertical_offset', 
+                'mouth_scale_factor', 'debug_mouth_mask', 'mask_shape', 
+                'mask_height_ratio', 'mask_corner_radius'
+            ]
+            
+            for param in mouth_params:
+                if param in task_config:
+                    setattr(args, param, task_config[param])
+                    print(f"🔧 Using YAML parameter: {param} = {task_config[param]}")
             
             # Set bbox_shift based on version
             if args.version == "v15":
                 bbox_shift = 0  # v15 uses fixed bbox_shift
             else:
-                bbox_shift = inference_config[task_id].get("bbox_shift", args.bbox_shift)  # v1 uses config or default
+                bbox_shift = task_config.get("bbox_shift", args.bbox_shift)  # v1 uses config or default
             
             # Set output paths
             input_basename = os.path.basename(video_path).split('.')[0]
