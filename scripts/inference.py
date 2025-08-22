@@ -13,6 +13,8 @@ from tqdm import tqdm
 from omegaconf import OmegaConf
 from transformers import WhisperModel
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 from musetalk.utils.blending import get_image
 from musetalk.utils.face_parsing import FaceParsing
@@ -20,6 +22,7 @@ from musetalk.utils.audio_processor import AudioProcessor
 from musetalk.utils.utils import get_file_type, get_video_fps, datagen, datagen_enhanced, load_all_model
 
 from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder
+from musetalk.utils.parallel_io import ParallelFrameWriter
 
 # Import GPEN-BFR face enhancer
 try:
@@ -292,38 +295,65 @@ def main(args):
                     for process_type in batch_data['process_types']:
                         res_frame_list.append(None)  # All passthrough, handle in output phase
             
-            # Enhanced frame output with support for passthrough frames  
-            print("Processing enhanced frame output (lip-sync + passthrough)")
-            for i, res_frame in enumerate(tqdm(res_frame_list)):
-                bbox = coord_list_cycle[i%(len(coord_list_cycle))]
-                ori_frame = copy.deepcopy(frame_list_cycle[i%(len(frame_list_cycle))])
-                
-                # Handle passthrough frames (no face detected)
-                if bbox == coord_placeholder or res_frame is None:
-                    # Use original frame unchanged - perfect for cutaways!
-                    combine_frame = ori_frame
-                    print(f"Frame {i}: Using passthrough (no face)")
-                else:
-                    # Normal lip-sync processing for frames with faces
-                    x1, y1, x2, y2 = bbox
-                    if args.version == "v15":
-                        y2 = y2 + args.extra_margin
-                        y2 = min(y2, frame.shape[0])
+            # Enhanced frame output with parallel I/O for better performance
+            print("🚀 Processing enhanced frame output (lip-sync + passthrough + parallel I/O)")
+            
+            # Initialize parallel frame writer
+            frame_writer = ParallelFrameWriter(max_workers=4)
+            
+            # Use ThreadPoolExecutor for parallel I/O
+            with ThreadPoolExecutor(max_workers=4) as io_executor:
+                for i, res_frame in enumerate(tqdm(res_frame_list, desc="Processing frames")):
+                    bbox = coord_list_cycle[i%(len(coord_list_cycle))]
+                    ori_frame = copy.deepcopy(frame_list_cycle[i%(len(frame_list_cycle))])
                     
-                    try:
-                        res_frame = cv2.resize(res_frame.astype(np.uint8), (x2-x1, y2-y1))
-                        
-                        # Merge results with version-specific parameters  
-                        if args.version == "v15":
-                            combine_frame = get_image(ori_frame, res_frame, [x1, y1, x2, y2], mode=args.parsing_mode, fp=fp)
-                        else:
-                            combine_frame = get_image(ori_frame, res_frame, [x1, y1, x2, y2], fp=fp)
-                    except Exception as e:
-                        print(f"Frame {i}: Processing failed, using passthrough - {e}")
+                    # Handle passthrough frames (no face detected)
+                    if bbox == coord_placeholder or res_frame is None:
+                        # Use original frame unchanged - perfect for cutaways!
                         combine_frame = ori_frame
+                        if i < 10:  # Only show first 10 passthrough messages to avoid spam
+                            print(f"Frame {i}: Using passthrough (no face)")
+                    else:
+                        # Normal lip-sync processing for frames with faces
+                        x1, y1, x2, y2 = bbox
+                        if args.version == "v15":
+                            y2 = y2 + args.extra_margin
+                            y2 = min(y2, frame.shape[0])
+                        
+                        try:
+                            res_frame = cv2.resize(res_frame.astype(np.uint8), (x2-x1, y2-y1))
+                            
+                            # Merge results with version-specific parameters  
+                            if args.version == "v15":
+                                combine_frame = get_image(
+                                    ori_frame, res_frame, [x1, y1, x2, y2], 
+                                    upper_boundary_ratio=args.upper_boundary_ratio,
+                                    expand=args.expand_factor,
+                                    mode=args.parsing_mode, 
+                                    fp=fp,
+                                    use_elliptical_mask=args.use_elliptical_mask,
+                                    ellipse_padding_factor=args.ellipse_padding_factor,
+                                    blur_kernel_ratio=args.blur_kernel_ratio
+                                )
+                            else:
+                                combine_frame = get_image(
+                                    ori_frame, res_frame, [x1, y1, x2, y2], 
+                                    upper_boundary_ratio=args.upper_boundary_ratio,
+                                    expand=args.expand_factor,
+                                    fp=fp,
+                                    use_elliptical_mask=args.use_elliptical_mask,
+                                    ellipse_padding_factor=args.ellipse_padding_factor,
+                                    blur_kernel_ratio=args.blur_kernel_ratio
+                                )
+                        except Exception as e:
+                            print(f"Frame {i}: Processing failed, using passthrough - {e}")
+                            combine_frame = ori_frame
+                    
+                    # Write frame asynchronously for better performance
+                    frame_writer.write_frame_async(io_executor, i, combine_frame, result_img_save_path)
                 
-                # ALWAYS write frame - ensures perfect video continuity
-                cv2.imwrite(f"{result_img_save_path}/{str(i).zfill(8)}.png", combine_frame)
+                # Wait for all frame writes to complete
+                frame_writer.wait_for_completion()
 
             # Save prediction results
             temp_vid_path = f"{temp_dir}/temp_{input_basename}_{audio_basename}.mp4"
@@ -438,6 +468,13 @@ if __name__ == "__main__":
     parser.add_argument("--left_cheek_width", type=int, default=90, help="Width of left cheek region")
     parser.add_argument("--right_cheek_width", type=int, default=90, help="Width of right cheek region")
     parser.add_argument("--version", type=str, default="v15", choices=["v1", "v15"], help="Model version to use")
+    
+    # Mouth Overlay Accuracy Parameters
+    parser.add_argument("--ellipse_padding_factor", type=float, default=0.1, help="Ellipse padding factor for mouth mask (smaller = larger mouth coverage, 0.06-0.15)")
+    parser.add_argument("--upper_boundary_ratio", type=float, default=0.5, help="Upper boundary ratio for face replacement (smaller = more face coverage, 0.3-0.7)")
+    parser.add_argument("--expand_factor", type=float, default=1.5, help="Face crop expansion factor (larger = more context, 1.2-1.8)")
+    parser.add_argument("--use_elliptical_mask", action="store_true", default=True, help="Use elliptical mask instead of rectangular (recommended)")
+    parser.add_argument("--blur_kernel_ratio", type=float, default=0.05, help="Blur kernel size ratio for mask smoothing (0.02-0.08)")
     
     # GPEN-BFR Face Enhancement Parameters
     parser.add_argument("--enable_gpen_bfr", action="store_true", help="Enable GPEN-BFR face enhancement")

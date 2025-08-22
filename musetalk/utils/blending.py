@@ -32,7 +32,7 @@ def face_seg(image, mode="raw", fp=None):
     return seg_image
 
 
-def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode="raw", fp=None, use_elliptical_mask=True, ellipse_padding_factor=0.1):
+def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode="raw", fp=None, use_elliptical_mask=True, ellipse_padding_factor=0.1, blur_kernel_ratio=0.05):
     """
     将裁剪的面部图像粘贴回原始图像，并进行一些处理。
 
@@ -45,6 +45,7 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
         mode: 融合mask构建方式 
         use_elliptical_mask (bool): 是否使用椭圆形掩码而不是矩形掩码。
         ellipse_padding_factor (float): 椭圆掩码的内边距因子，控制椭圆相对于面部边界的大小。
+        blur_kernel_ratio (float): 高斯模糊核大小比例，用于平滑掩码边缘。
 
     Returns:
         numpy.ndarray: 处理后的图像。
@@ -108,7 +109,7 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
     
     
     # 对掩码进行高斯模糊，使边缘更平滑
-    blur_kernel_size = int(0.05 * ori_shape[0] // 2 * 2) + 1  # 计算模糊核大小
+    blur_kernel_size = int(blur_kernel_ratio * ori_shape[0] // 2 * 2) + 1  # 计算模糊核大小
     mask_array = cv2.GaussianBlur(np.array(modified_mask_image), (blur_kernel_size, blur_kernel_size), 0)  # 高斯模糊
     #mask_array = np.array(modified_mask_image)
     mask_image = Image.fromarray(mask_array)  # 将模糊后的掩码转换回 PIL 图像
