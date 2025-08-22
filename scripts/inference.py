@@ -330,13 +330,63 @@ def main(args):
             # Fix path separators for FFmpeg compatibility
             result_img_save_path_fixed = result_img_save_path.replace("\\", "/")
             temp_vid_path_fixed = temp_vid_path.replace("\\", "/")
-            cmd_img2video = f"ffmpeg -y -v warning -r {fps} -f image2 -i {result_img_save_path_fixed}/%08d.png -vcodec libx264 -vf format=yuv420p -crf 18 {temp_vid_path_fixed}"
-            print("Video generation command:", cmd_img2video)
-            try:
-                subprocess.run(cmd_img2video, shell=True, check=True)
-                print("✅ Video generation successful")
-            except subprocess.CalledProcessError as e:
-                print(f"❌ Video generation failed: {e}")
+            # Configure encoding options based on user preferences
+            if args.force_cpu_encoding or not args.gpu_encoding:
+                # CPU-only encoding
+                encoders = [
+                    {
+                        "name": "CPU (libx264)",
+                        "cmd": f"ffmpeg -y -v warning -r {fps} -f image2 -i {result_img_save_path_fixed}/%08d.png -vcodec libx264 -preset {args.encoding_preset} -crf {args.encoding_crf} -pix_fmt yuv420p {temp_vid_path_fixed}"
+                    }
+                ]
+            else:
+                # GPU-accelerated video encoding with fallback options
+                encoders = [
+                    # NVIDIA NVENC (best performance for NVIDIA GPUs)
+                    {
+                        "name": "NVENC (NVIDIA)",
+                        "cmd": f"ffmpeg -y -v warning -r {fps} -f image2 -i {result_img_save_path_fixed}/%08d.png -c:v h264_nvenc -preset {args.encoding_preset} -crf {args.encoding_crf} -pix_fmt yuv420p {temp_vid_path_fixed}"
+                    },
+                    # AMD VCE (for AMD GPUs)
+                    {
+                        "name": "VCE (AMD)", 
+                        "cmd": f"ffmpeg -y -v warning -r {fps} -f image2 -i {result_img_save_path_fixed}/%08d.png -c:v h264_amf -rc cqp -qp {args.encoding_crf} -pix_fmt yuv420p {temp_vid_path_fixed}"
+                    },
+                    # Intel Quick Sync (for Intel integrated graphics)
+                    {
+                        "name": "Quick Sync (Intel)",
+                        "cmd": f"ffmpeg -y -v warning -r {fps} -f image2 -i {result_img_save_path_fixed}/%08d.png -c:v h264_qsv -preset {args.encoding_preset} -crf {args.encoding_crf} -pix_fmt yuv420p {temp_vid_path_fixed}"
+                    },
+                    # CPU fallback (original method)
+                    {
+                        "name": "CPU (libx264)",
+                        "cmd": f"ffmpeg -y -v warning -r {fps} -f image2 -i {result_img_save_path_fixed}/%08d.png -vcodec libx264 -preset {args.encoding_preset} -crf {args.encoding_crf} -pix_fmt yuv420p {temp_vid_path_fixed}"
+                    }
+                ]
+            
+            # Try encoders in order (GPU first if enabled, then fallbacks)
+            encoding_successful = False
+            for encoder in encoders:
+                print(f"🎬 Trying {encoder['name']} encoding...")
+                print(f"Command: {encoder['cmd']}")
+                
+                try:
+                    result = subprocess.run(encoder['cmd'], shell=True, check=True, 
+                                          capture_output=True, text=True)
+                    print(f"✅ Video encoding successful with {encoder['name']}")
+                    encoding_successful = True
+                    break
+                except subprocess.CalledProcessError as e:
+                    print(f"⚠️ {encoder['name']} failed: {e.stderr if e.stderr else str(e)}")
+                    if encoder != encoders[-1]:  # Not the last option
+                        print(f"   Trying next encoding option...")
+                        continue
+                    else:
+                        print(f"❌ All encoding options failed")
+                        return
+            
+            if not encoding_successful:
+                print("❌ Video generation failed with all encoding methods")
                 return
             
             # Fix paths for audio combination
@@ -396,5 +446,20 @@ if __name__ == "__main__":
                        choices=["NATURAL", "BALANCED", "QUALITY_FOCUSED", "CONSERVATIVE", "DRAMATIC", "SKIN_FOCUS", "DETAIL_ENHANCE", "LIPS_OPTIMIZED"],
                        help="GPEN-BFR enhancement configuration preset")
     
+    # GPU Video Encoding Parameters
+    parser.add_argument("--gpu_encoding", action="store_true", default=True, help="Enable GPU-accelerated video encoding (default: True)")
+    parser.add_argument("--force_cpu_encoding", action="store_true", help="Force CPU encoding (overrides GPU encoding)")
+    parser.add_argument("--encoding_preset", type=str, default="fast", choices=["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"],
+                       help="Encoding preset (speed vs quality tradeoff)")
+    parser.add_argument("--encoding_crf", type=int, default=18, help="Constant Rate Factor for quality (lower = better quality, 0-51)")
+    
     args = parser.parse_args()
+    
+    # Handle encoding preferences
+    if args.force_cpu_encoding:
+        args.gpu_encoding = False
+        print("🔧 Forced CPU encoding enabled")
+    elif args.gpu_encoding:
+        print("🚀 GPU encoding enabled (will fallback to CPU if needed)")
+    
     main(args)
