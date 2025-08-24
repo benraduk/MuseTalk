@@ -24,3 +24,4 @@ exp_out
 /temp_frames
 /debug_mouth_masks
 *.pkl
+/debug_output
