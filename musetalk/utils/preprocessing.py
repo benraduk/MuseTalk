@@ -13,29 +13,48 @@ from tqdm import tqdm
 # Initialize face detection model (core MuseTalk functionality)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Try to use YOLOv8 first, fallback to SFD if it fails
-use_yolo = True  # Set to False to force SFD usage
+# Global face detector - will be initialized by init_face_detector()
 fa = None
 
-if use_yolo:
-    try:
-        from .face_detection.api import YOLOv8_face
-        model_path = 'models/face_detection/weights/yolov8n-face.onnx'
-        if os.path.exists(model_path):
-            fa = YOLOv8_face(path=model_path, conf_thres=0.5)
-            print("🚀 Using YOLOv8 face detection")
-        else:
-            print(f"⚠️ YOLOv8 model not found at {model_path}")
-            raise FileNotFoundError("YOLOv8 model not available")
-    except Exception as e:
-        print(f"⚠️ YOLOv8 failed to load: {e}")
-        print("🔄 Falling back to SFD face detection")
-        fa = None
-
-# Fallback to SFD if YOLOv8 failed
-if fa is None:
+def init_face_detector(use_yolo=True, yolo_conf_threshold=0.5, yolo_temporal_weight=0.25, 
+                      yolo_size_weight=0.30, yolo_center_weight=0.20, yolo_max_face_jump=0.3,
+                      yolo_primary_face_lock_threshold=10, yolo_primary_face_confidence_drop=0.8):
+    """Initialize face detector with configurable parameters"""
+    global fa
+    
+    if use_yolo:
+        try:
+            from .face_detection.api import YOLOv8_face
+            model_path = 'models/face_detection/weights/yolov8n-face.onnx'
+            if os.path.exists(model_path):
+                fa = YOLOv8_face(
+                    path=model_path, 
+                    conf_thres=yolo_conf_threshold,
+                    temporal_weight=yolo_temporal_weight,
+                    size_weight=yolo_size_weight,
+                    center_weight=yolo_center_weight,
+                    max_face_jump=yolo_max_face_jump,
+                    primary_face_lock_threshold=yolo_primary_face_lock_threshold,
+                    primary_face_confidence_drop=yolo_primary_face_confidence_drop
+                )
+                print(f"Using YOLOv8 face detection (conf={yolo_conf_threshold}, "
+                      f"temporal={yolo_temporal_weight}, size={yolo_size_weight}, "
+                      f"lock_threshold={yolo_primary_face_lock_threshold})")
+                return fa
+            else:
+                print(f"WARNING: YOLOv8 model not found at {model_path}")
+                raise FileNotFoundError("YOLOv8 model not available")
+        except Exception as e:
+            print(f"WARNING: YOLOv8 failed to load: {e}")
+            print("Falling back to SFD face detection")
+    
+    # Fallback to SFD
     fa = FaceAlignment(LandmarksType._2D, flip_input=False, device=device)
-    print("🔧 Using SFD face detection")
+    print("Using SFD face detection")
+    return fa
+
+# Initialize with default parameters
+fa = init_face_detector()
 
 # maker if the bbox is not sufficient 
 coord_placeholder = (0.0,0.0,0.0,0.0)

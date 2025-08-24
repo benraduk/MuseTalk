@@ -1,7 +1,7 @@
 task_0:
- video_path: "data/video/Canva_en_short.mp4"
- audio_path: "data/audio/Canva_FR_short.m4a"
- result_name: "Canva_en_6pad.mp4"
+ video_path: "data/video/Canva_en.mp4"
+ audio_path: "data/audio/Canva_FR.m4a"
+ result_name: "Canva_yolo.mp4"
  result_dir: "./results"
  bbox_shift: 7
  
@@ -13,13 +13,25 @@ task_0:
  blur_kernel_ratio: 0.08           # Mask smoothing (0.02-0.08)
  
  # 🎯 Precise Mouth Positioning & Sizing - ENHANCED
- mouth_vertical_offset: 0.02       # Vertical mouth position (+0.02 = lower, -0.02 = higher)
- mouth_scale_factor: 1.4           # LARGER mouth scaling for better coverage
+ mouth_vertical_offset: 0       # Vertical mouth position (+0.02 = lower, -0.02 = higher)
+ mouth_scale_factor: 1.0           # LARGER mouth scaling for better coverage
  
- # 🎨 Advanced Mask Shape Options - MAXIMUM HEIGHT
- mask_shape: "wide_ellipse"        # Shape: ellipse, wide_ellipse, triangle, rounded_triangle
+ # 🎨 Advanced Mask Shape Options - MAXIMUM COVERAGE
+ mask_shape: "ultra_wide_ellipse"        # Shape: ellipse, wide_ellipse, ultra_wide_ellipse, triangle, rounded_triangle
  mask_height_ratio: 0.9            # MAXIMUM height ratio (taller mask)
  mask_corner_radius: 0.2           # Corner rounding for rounded shapes (0.0-0.5)
+ # NOTE: Use "ultra_wide_ellipse" for maximum lip coverage in challenging cases
  
  # 🔍 Debug Options
- debug_mouth_mask: false            # Enable debug outputs for troubleshooting
+ debug_mouth_mask: true            # Enable debug outputs for troubleshooting
+
+# 🎯 YOLOv8 Face Selection Parameters (NEW)
+ yolo_conf_threshold: 0.5          # Minimum confidence for face detection (0.2-0.8)
+ yolo_temporal_weight: 0.25        # Weight for temporal consistency (prevent face switching)
+ yolo_size_weight: 0.30            # Weight for face size (prefer larger faces)
+ yolo_center_weight: 0.20          # Weight for center position (prefer centered faces)
+ yolo_max_face_jump: 0.3           # Maximum allowed face center jump (as fraction of frame width)
+
+# 🔒 Primary Face Locking (ANTI-GLITCH PROTECTION)
+ yolo_primary_face_lock_threshold: 10  # Lock primary face after N consistent frames (5-20)
+ yolo_primary_face_confidence_drop: 0.8  # Allow confidence drop to this ratio before unlocking (0.6-0.9)

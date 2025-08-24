@@ -89,11 +89,27 @@ class FaceAlignment:
     
     
 class YOLOv8_face:
-    def __init__(self, path = 'face_detection/weights/yolov8n-face.onnx', conf_thres=0.2, iou_thres=0.5):
+    def __init__(self, path = 'face_detection/weights/yolov8n-face.onnx', conf_thres=0.2, iou_thres=0.5,
+                 temporal_weight=0.25, size_weight=0.30, center_weight=0.20, max_face_jump=0.3,
+                 primary_face_lock_threshold=10, primary_face_confidence_drop=0.8):
         self.conf_threshold = conf_thres
         self.iou_threshold = iou_thres
         self.class_names = ['face']
         self.num_classes = len(self.class_names)
+        
+        # Face selection parameters
+        self.temporal_weight = temporal_weight
+        self.size_weight = size_weight
+        self.center_weight = center_weight
+        self.max_face_jump = max_face_jump
+        
+        # Primary face locking system
+        self.primary_face_bbox = None
+        self.primary_face_confidence = 0.0
+        self.frames_since_primary_established = 0
+        self.primary_face_lock_threshold = primary_face_lock_threshold
+        self.primary_face_confidence_drop = primary_face_confidence_drop
+        self.primary_face_locked = False
         
         # Initialize ONNX Runtime session
         providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
@@ -341,19 +357,239 @@ class YOLOv8_face:
         return np.array(bounding_boxes), np.array(face_scores), np.array(face_landmarks_5)
     
     def get_detections_for_batch(self, frames):
-        """SFD-compatible batch detection interface"""
+        """SFD-compatible batch detection interface with intelligent face selection"""
         results = []
-        for frame in frames:
+        previous_bbox = None
+        
+        for frame_idx, frame in enumerate(frames):
             det_bboxes, det_conf, det_classid, landmarks = self.detect(frame)
-            if len(det_bboxes) > 0 and len(det_conf) > 0 and det_conf[0] > self.conf_threshold:
-                # det_bboxes are already in xyxy format from postprocess_outputs
-                bbox = det_bboxes[0]
-                # Convert numpy array to tuple of integers for pipeline compatibility
-                bbox_tuple = (int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]))
-                results.append(bbox_tuple)
+            
+            if len(det_bboxes) > 0 and len(det_conf) > 0:
+                # Filter faces by confidence threshold
+                valid_indices = [i for i, conf in enumerate(det_conf) if conf > self.conf_threshold]
+                
+                if valid_indices:
+                    # Select the best face using multiple criteria
+                    selected_bbox = self._select_best_face(
+                        det_bboxes[valid_indices], 
+                        det_conf[valid_indices], 
+                        landmarks[valid_indices] if len(landmarks) > 0 else None,
+                        frame.shape, 
+                        previous_bbox
+                    )
+                    
+                    if selected_bbox is not None:
+                        # Convert numpy array to tuple of integers for pipeline compatibility
+                        bbox_tuple = (int(selected_bbox[0]), int(selected_bbox[1]), 
+                                    int(selected_bbox[2]), int(selected_bbox[3]))
+                        results.append(bbox_tuple)
+                        previous_bbox = selected_bbox
+                    else:
+                        results.append(None)
+                else:
+                    results.append(None)
             else:
                 results.append(None)
         return results
+    
+    def _select_best_face(self, bboxes, confidences, landmarks, frame_shape, previous_bbox):
+        """
+        Select the best face with primary face locking to prevent switching.
+        Once a primary face is established and locked, it will be preferred unless:
+        1. The primary face is no longer detected
+        2. The primary face confidence drops significantly
+        3. A much better face appears (rare override case)
+        """
+        if len(bboxes) == 0:
+            return None
+            
+        if len(bboxes) == 1:
+            selected_bbox = bboxes[0]
+            self._update_primary_face_tracking(selected_bbox, confidences[0])
+            return selected_bbox
+        
+        frame_height, frame_width = frame_shape[:2]
+        
+        # If primary face is locked, try to find it first
+        if self.primary_face_locked and self.primary_face_bbox is not None:
+            primary_match_index = self._find_primary_face_match(bboxes, frame_width)
+            if primary_match_index is not None:
+                # Check if primary face confidence is still acceptable
+                if confidences[primary_match_index] >= self.conf_threshold * self.primary_face_confidence_drop:
+                    selected_bbox = bboxes[primary_match_index]
+                    self._update_primary_face_tracking(selected_bbox, confidences[primary_match_index])
+                    return selected_bbox
+                else:
+                    print(f"Primary face confidence too low ({confidences[primary_match_index]:.3f}), unlocking...")
+                    self._reset_primary_face_tracking()
+        
+        # Either no primary face locked or primary face not found/acceptable
+        # Use standard selection algorithm
+        frame_center_x, frame_center_y = frame_width / 2, frame_height / 2
+        scores = []
+        
+        for i, (bbox, conf) in enumerate(zip(bboxes, confidences)):
+            x1, y1, x2, y2 = bbox
+            
+            # Calculate face properties
+            face_width = x2 - x1
+            face_height = y2 - y1
+            face_area = face_width * face_height
+            face_center_x = (x1 + x2) / 2
+            face_center_y = (y1 + y2) / 2
+            
+            # 1. Confidence score (0-1, higher is better)
+            confidence_score = float(conf)
+            
+            # 2. Size score (prefer larger faces, normalize by frame area)
+            frame_area = frame_width * frame_height
+            size_score = min(face_area / (frame_area * 0.1), 1.0)  # Cap at reasonable size
+            
+            # 3. Center position score (prefer faces closer to center)
+            distance_to_center = np.sqrt((face_center_x - frame_center_x)**2 + 
+                                       (face_center_y - frame_center_y)**2)
+            max_distance = np.sqrt(frame_center_x**2 + frame_center_y**2)
+            center_score = 1.0 - (distance_to_center / max_distance)
+            
+            # 4. Temporal consistency score (prefer faces close to previous detection)
+            temporal_score = 1.0
+            if previous_bbox is not None:
+                prev_center_x = (previous_bbox[0] + previous_bbox[2]) / 2
+                prev_center_y = (previous_bbox[1] + previous_bbox[3]) / 2
+                temporal_distance = np.sqrt((face_center_x - prev_center_x)**2 + 
+                                          (face_center_y - prev_center_y)**2)
+                # Normalize by frame diagonal
+                frame_diagonal = np.sqrt(frame_width**2 + frame_height**2)
+                temporal_score = max(0.0, 1.0 - (temporal_distance / (frame_diagonal * 0.3)))
+            
+            # 5. Face quality score (frontal vs profile based on landmarks if available)
+            quality_score = 1.0
+            if landmarks is not None and len(landmarks) > i:
+                face_landmarks = landmarks[i]
+                if len(face_landmarks) >= 5:  # 5-point landmarks
+                    # Calculate face symmetry (frontal faces are more symmetric)
+                    left_eye = face_landmarks[0]
+                    right_eye = face_landmarks[1]
+                    nose = face_landmarks[2]
+                    
+                    # Check if nose is roughly centered between eyes
+                    eye_center_x = (left_eye[0] + right_eye[0]) / 2
+                    nose_offset = abs(nose[0] - eye_center_x)
+                    eye_distance = abs(right_eye[0] - left_eye[0])
+                    
+                    if eye_distance > 0:
+                        symmetry_ratio = 1.0 - min(nose_offset / (eye_distance * 0.5), 1.0)
+                        quality_score = symmetry_ratio
+            
+            # Combine scores with configurable weights
+            remaining_weight = 1.0 - (self.size_weight + self.center_weight + self.temporal_weight)
+            confidence_weight = remaining_weight * 0.6  # 60% of remaining for confidence
+            quality_weight = remaining_weight * 0.4     # 40% of remaining for quality
+            
+            total_score = (
+                confidence_score * confidence_weight +
+                size_score * self.size_weight +
+                center_score * self.center_weight +
+                temporal_score * self.temporal_weight +
+                quality_score * quality_weight
+            )
+            
+            scores.append(total_score)
+        
+        # Select face with highest combined score
+        best_index = np.argmax(scores)
+        selected_bbox = bboxes[best_index]
+        
+        # Update primary face tracking
+        self._update_primary_face_tracking(selected_bbox, confidences[best_index])
+        
+        # Debug info for face switches
+        if previous_bbox is not None and len(bboxes) > 1:
+            prev_center = ((previous_bbox[0] + previous_bbox[2]) / 2, 
+                          (previous_bbox[1] + previous_bbox[3]) / 2)
+            curr_center = ((selected_bbox[0] + selected_bbox[2]) / 2,
+                          (selected_bbox[1] + selected_bbox[3]) / 2)
+            distance = np.sqrt((curr_center[0] - prev_center[0])**2 + 
+                             (curr_center[1] - prev_center[1])**2)
+            
+            # Log significant face switches for debugging
+            if distance > frame_width * self.max_face_jump:
+                lock_status = "LOCKED" if self.primary_face_locked else "unlocked"
+                print(f"Face switch detected: distance={distance:.1f}px, "
+                      f"prev_center={prev_center}, curr_center={curr_center}, "
+                      f"selected_score={scores[best_index]:.3f}, status={lock_status}")
+        
+        return selected_bbox
+    
+    def _find_primary_face_match(self, bboxes, frame_width):
+        """Find the bbox that best matches the primary face"""
+        if self.primary_face_bbox is None:
+            return None
+            
+        primary_center_x = (self.primary_face_bbox[0] + self.primary_face_bbox[2]) / 2
+        primary_center_y = (self.primary_face_bbox[1] + self.primary_face_bbox[3]) / 2
+        
+        best_match_index = None
+        min_distance = float('inf')
+        
+        for i, bbox in enumerate(bboxes):
+            x1, y1, x2, y2 = bbox
+            center_x = (x1 + x2) / 2
+            center_y = (y1 + y2) / 2
+            
+            distance = np.sqrt((center_x - primary_center_x)**2 + (center_y - primary_center_y)**2)
+            
+            # Consider it a match if within reasonable distance
+            if distance < frame_width * self.max_face_jump and distance < min_distance:
+                min_distance = distance
+                best_match_index = i
+        
+        return best_match_index
+    
+    def _update_primary_face_tracking(self, bbox, confidence):
+        """Update primary face tracking state"""
+        if self.primary_face_bbox is None:
+            # First face detected
+            self.primary_face_bbox = bbox
+            self.primary_face_confidence = confidence
+            self.frames_since_primary_established = 1
+            print(f"Primary face candidate established: confidence={confidence:.3f}")
+        else:
+            # Check if this is the same face (within reasonable distance)
+            current_center = ((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2)
+            primary_center = ((self.primary_face_bbox[0] + self.primary_face_bbox[2]) / 2,
+                            (self.primary_face_bbox[1] + self.primary_face_bbox[3]) / 2)
+            distance = np.sqrt((current_center[0] - primary_center[0])**2 + 
+                             (current_center[1] - primary_center[1])**2)
+            
+            # Estimate frame width from bbox (rough approximation)
+            face_width = bbox[2] - bbox[0]
+            estimated_frame_width = face_width * 8  # Rough estimate
+            
+            if distance < estimated_frame_width * self.max_face_jump:
+                # Same face, update tracking
+                self.primary_face_bbox = bbox
+                self.primary_face_confidence = max(self.primary_face_confidence, confidence)
+                self.frames_since_primary_established += 1
+                
+                # Lock primary face after threshold frames
+                if not self.primary_face_locked and self.frames_since_primary_established >= self.primary_face_lock_threshold:
+                    self.primary_face_locked = True
+                    print(f"Primary face LOCKED after {self.frames_since_primary_established} consistent frames (confidence={self.primary_face_confidence:.3f})")
+            else:
+                # Different face, reset tracking
+                print(f"Primary face changed (distance={distance:.1f}px), resetting tracking...")
+                self._reset_primary_face_tracking()
+                self.primary_face_bbox = bbox
+                self.primary_face_confidence = confidence
+                self.frames_since_primary_established = 1
+    
+    def _reset_primary_face_tracking(self):
+        """Reset primary face tracking state"""
+        self.primary_face_bbox = None
+        self.primary_face_confidence = 0.0
+        self.frames_since_primary_established = 0
+        self.primary_face_locked = False
 
     def _convert_to_xyxy(self, bbox_xywh):
         """Convert YOLOv8 xywh format to SFD xyxy format"""

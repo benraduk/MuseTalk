@@ -53,7 +53,7 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
         debug_mouth_mask (bool): Save debug outputs for troubleshooting
         debug_frame_idx (int): Frame index for debug file naming
         debug_output_dir (str): Directory to save debug outputs
-        mask_shape (str): Shape of blending mask ("ellipse", "triangle", "rounded_triangle", "wide_ellipse")
+        mask_shape (str): Shape of blending mask ("ellipse", "triangle", "rounded_triangle", "wide_ellipse", "ultra_wide_ellipse")
         mask_height_ratio (float): Height ratio for mask relative to mouth width (0.3-0.8)
         mask_corner_radius (float): Corner radius for rounded shapes (0.0-0.5)
 
@@ -125,9 +125,14 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
         mouth_region_width = base_mouth_width * (1.0 + ellipse_padding_factor * 2)  # Add padding
         
         # 🎭 ADVANCED MASK SHAPES: Calculate dimensions based on mask shape
-        if mask_shape == "wide_ellipse":
-            # Wide ellipse: much taller than standard ellipse
-            mouth_region_height = base_mouth_width * mask_height_ratio * 1.5  # Extra height
+        if mask_shape == "ultra_wide_ellipse":
+            # Ultra wide ellipse: MAXIMUM coverage for challenging cases
+            mouth_region_width = mouth_region_width * 1.8  # 80% wider than standard
+            mouth_region_height = base_mouth_width * mask_height_ratio * 1.8  # Maximum height
+        elif mask_shape == "wide_ellipse":
+            # Wide ellipse: MUCH wider and taller for maximum lip coverage
+            mouth_region_width = mouth_region_width * 1.4  # 40% wider than standard
+            mouth_region_height = base_mouth_width * mask_height_ratio * 1.6  # Extra height
         elif mask_shape in ["triangle", "rounded_triangle"]:
             # Triangle shapes: height based on natural face geometry
             mouth_region_height = base_mouth_width * mask_height_ratio * 1.2
@@ -162,8 +167,12 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
             # Standard ellipse
             draw.ellipse([mask_left, mask_top, mask_right, mask_bottom], fill=255)
             
+        elif mask_shape == "ultra_wide_ellipse":
+            # Ultra wide ellipse - maximum coverage for challenging cases
+            draw.ellipse([mask_left, mask_top, mask_right, mask_bottom], fill=255)
+            
         elif mask_shape == "wide_ellipse":
-            # Wide ellipse - much taller vertically
+            # Wide ellipse - much wider and taller
             draw.ellipse([mask_left, mask_top, mask_right, mask_bottom], fill=255)
             
         elif mask_shape == "triangle":
@@ -320,7 +329,7 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
         
         offset_info = f", offset {mouth_vertical_offset:+.2f}" if mouth_vertical_offset != 0.0 else ""
         scale_info = f", scale {mouth_scale_factor:.2f}" if mouth_scale_factor != 1.0 else ""
-        print(f"🎯 Surgical positioning: mouth center ({mouth_center_x:.1f}, {mouth_center_y + offset_pixels:.1f}), width {mouth_width:.1f}px→{base_mouth_width:.1f}px{offset_info}{scale_info}")
+        print(f"Surgical positioning: mouth center ({mouth_center_x:.1f}, {mouth_center_y + offset_pixels:.1f}), width {mouth_width:.1f}px→{base_mouth_width:.1f}px{offset_info}{scale_info}")
         
     elif use_elliptical_mask:
         # Fallback: Create elliptical mask for more natural blending (original method)
@@ -364,9 +373,9 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
                     cropped_mask = final_face_mask.crop((0, 0, crop_w, crop_h))
                     mask_image.paste(cropped_mask, (paste_x, paste_y))
         else:
-            print(f"⚠️ Warning: Invalid paste coordinates ({paste_x}, {paste_y}) - skipping elliptical mask paste")
+            print(f"Warning: Invalid paste coordinates ({paste_x}, {paste_y}) - skipping elliptical mask paste")
         
-        print(f"🔧 Fallback: elliptical mask (no landmarks available)")
+        print(f"Fallback: elliptical mask (no landmarks available)")
     else:
         # Original rectangular mask behavior with bounds checking
         paste_x = x - x_s
@@ -380,10 +389,10 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
             if paste_x1 <= target_w and paste_y1 <= target_h:
                 mask_image.paste(mask_small, (paste_x, paste_y, paste_x1, paste_y1))
             else:
-                print(f"⚠️ Warning: Rectangular mask bounds ({paste_x}, {paste_y}, {paste_x1}, {paste_y1}) exceed target size ({target_w}, {target_h})")
+                print(f"Warning: Rectangular mask bounds ({paste_x}, {paste_y}, {paste_x1}, {paste_y1}) exceed target size ({target_w}, {target_h})")
         else:
-            print(f"⚠️ Warning: Invalid rectangular mask coordinates ({paste_x}, {paste_y}, {paste_x1}, {paste_y1}) - skipping mask paste")
-        print(f"📦 Basic: rectangular mask")
+            print(f"Warning: Invalid rectangular mask coordinates ({paste_x}, {paste_y}, {paste_x1}, {paste_y1}) - skipping mask paste")
+        print(f"Basic: rectangular mask")
     
     
     # 保留面部区域的上半部分（用于控制说话区域）
@@ -452,7 +461,7 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
         overlay_vis = cv2.addWeighted(original_full, 0.7, mask_colored, 0.3, 0)
         cv2.imwrite(f"{debug_output_dir}/frame_{debug_frame_idx:06d}_mask_overlay.png", overlay_vis)
         
-        print(f"🔍 Debug saved: frame {debug_frame_idx} → {debug_output_dir}/")
+        print(f"Debug saved: frame {debug_frame_idx} → {debug_output_dir}/")
     
     body.paste(face_large, crop_box[:2], mask_image)
     

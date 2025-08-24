@@ -103,7 +103,7 @@ def main(args):
                 device="auto",
                 config_name=args.gpen_bfr_config
             )
-            print(f"✅ GPEN-BFR initialized with config: {args.gpen_bfr_config}")
+            print(f"GPEN-BFR initialized with config: {args.gpen_bfr_config}")
         except Exception as e:
             print(f"Warning: GPEN-BFR initialization failed: {e}")
             print("   Continuing without face enhancement...")
@@ -136,10 +136,36 @@ def main(args):
                 'mask_height_ratio', 'mask_corner_radius'
             ]
             
-            for param in mouth_params:
+            # YOLOv8 face selection parameters
+            yolo_params = [
+                'yolo_conf_threshold', 'yolo_temporal_weight', 'yolo_size_weight', 
+                'yolo_center_weight', 'yolo_max_face_jump', 'yolo_primary_face_lock_threshold',
+                'yolo_primary_face_confidence_drop'
+            ]
+            
+            for param in mouth_params + yolo_params:
                 if param in task_config:
                     setattr(args, param, task_config[param])
-                    print(f"🔧 Using YAML parameter: {param} = {task_config[param]}")
+                    print(f"Using YAML parameter: {param} = {task_config[param]}")
+                    if param == 'mask_shape':
+                        print(f"DEBUG: mask_shape set to: {args.mask_shape}")
+            
+            # REINITIALIZE FACE DETECTOR WITH YOLO PARAMETERS
+            # Check if any YOLOv8 parameters were specified in YAML
+            yolo_config_found = any(param in task_config for param in yolo_params)
+            if yolo_config_found:
+                from musetalk.utils.preprocessing import init_face_detector
+                print("Reinitializing face detector with YAML parameters...")
+                init_face_detector(
+                    use_yolo=True,
+                    yolo_conf_threshold=getattr(args, 'yolo_conf_threshold', 0.5),
+                    yolo_temporal_weight=getattr(args, 'yolo_temporal_weight', 0.25),
+                    yolo_size_weight=getattr(args, 'yolo_size_weight', 0.30),
+                    yolo_center_weight=getattr(args, 'yolo_center_weight', 0.20),
+                    yolo_max_face_jump=getattr(args, 'yolo_max_face_jump', 0.3),
+                    yolo_primary_face_lock_threshold=getattr(args, 'yolo_primary_face_lock_threshold', 10),
+                    yolo_primary_face_confidence_drop=getattr(args, 'yolo_primary_face_confidence_drop', 0.8)
+                )
             
             # Set bbox_shift based on version
             if args.version == "v15":
@@ -318,7 +344,7 @@ def main(args):
                         res_frame_list.append(None)  # All passthrough, handle in output phase
             
             # Enhanced frame output with parallel I/O for better performance
-            print("🚀 Processing enhanced frame output (lip-sync + passthrough + parallel I/O)")
+            print("Processing enhanced frame output (lip-sync + passthrough + parallel I/O)")
             
             # Initialize parallel frame writer
             frame_writer = ParallelFrameWriter(max_workers=4)
@@ -354,7 +380,11 @@ def main(args):
                             # Setup debug output directory if requested
                             debug_output_dir = None
                             if args.debug_mouth_mask:
-                                debug_output_dir = os.path.join(result_img_save_path, "debug_mouth_masks")
+                                # Create debug folder outside temp directory to prevent deletion
+                                debug_base_dir = os.path.join(os.getcwd(), "debug_mouth_masks")
+                                debug_output_dir = os.path.join(debug_base_dir, f"{args.version}_{output_basename}")
+                                os.makedirs(debug_output_dir, exist_ok=True)
+                                print(f"🔍 Debug outputs will be saved to: {debug_output_dir}")
                             
                             if args.version == "v15":
                                 combine_frame = get_image(
@@ -447,26 +477,26 @@ def main(args):
             # Try encoders in order (GPU first if enabled, then fallbacks)
             encoding_successful = False
             for encoder in encoders:
-                print(f"🎬 Trying {encoder['name']} encoding...")
+                print(f"Trying {encoder['name']} encoding...")
                 print(f"Command: {encoder['cmd']}")
                 
                 try:
                     result = subprocess.run(encoder['cmd'], shell=True, check=True, 
                                           capture_output=True, text=True)
-                    print(f"✅ Video encoding successful with {encoder['name']}")
+                    print(f"Video encoding successful with {encoder['name']}")
                     encoding_successful = True
                     break
                 except subprocess.CalledProcessError as e:
-                    print(f"⚠️ {encoder['name']} failed: {e.stderr if e.stderr else str(e)}")
+                    print(f"WARNING: {encoder['name']} failed: {e.stderr if e.stderr else str(e)}")
                     if encoder != encoders[-1]:  # Not the last option
                         print(f"   Trying next encoding option...")
                         continue
                     else:
-                        print(f"❌ All encoding options failed")
+                        print(f"ERROR: All encoding options failed")
                         return
             
             if not encoding_successful:
-                print("❌ Video generation failed with all encoding methods")
+                print("ERROR: Video generation failed with all encoding methods")
                 return
             
             # Fix paths for audio combination
@@ -476,10 +506,10 @@ def main(args):
             print("Audio combination command:", cmd_combine_audio) 
             try:
                 subprocess.run(cmd_combine_audio, shell=True, check=True)
-                print("✅ Audio combination successful")
-                print(f"🎬 Final video created: {output_vid_name_fixed}")
+                print("Audio combination successful")
+                print(f"Final video created: {output_vid_name_fixed}")
             except subprocess.CalledProcessError as e:
-                print(f"❌ Audio combination failed: {e}")
+                print(f"ERROR: Audio combination failed: {e}")
                 return
             
             # Clean up temporary files
@@ -528,7 +558,7 @@ if __name__ == "__main__":
     parser.add_argument("--mouth_vertical_offset", type=float, default=0.0, help="Vertical offset for mouth positioning (positive = lower, negative = higher, -0.05 to +0.05)")
     parser.add_argument("--mouth_scale_factor", type=float, default=1.0, help="Scale factor for mouth size matching (1.0 = exact YOLOv8 size, 1.1-1.3 = larger for better coverage)")
     parser.add_argument("--debug_mouth_mask", action="store_true", help="Save debug outputs: isolated AI mouth, mask, and overlay visualization")
-    parser.add_argument("--mask_shape", type=str, default="ellipse", choices=["ellipse", "triangle", "rounded_triangle", "wide_ellipse", "dynamic_contour"], help="Shape of the blending mask (ellipse, triangle, rounded_triangle, wide_ellipse, dynamic_contour)")
+    parser.add_argument("--mask_shape", type=str, default="ellipse", choices=["ellipse", "triangle", "rounded_triangle", "wide_ellipse", "ultra_wide_ellipse", "dynamic_contour"], help="Shape of the blending mask (ellipse, triangle, rounded_triangle, wide_ellipse, ultra_wide_ellipse, dynamic_contour)")
     parser.add_argument("--mask_height_ratio", type=float, default=0.4, help="Height ratio for mask relative to mouth width (0.3-0.8, higher = taller mask)")
     parser.add_argument("--mask_corner_radius", type=float, default=0.2, help="Corner radius for rounded shapes (0.0-0.5, 0.0 = sharp, 0.5 = very round)")
     
@@ -551,8 +581,8 @@ if __name__ == "__main__":
     # Handle encoding preferences
     if args.force_cpu_encoding:
         args.gpu_encoding = False
-        print("🔧 Forced CPU encoding enabled")
+        print("Forced CPU encoding enabled")
     elif args.gpu_encoding:
-        print("🚀 GPU encoding enabled (will fallback to CPU if needed)")
+        print("GPU encoding enabled (will fallback to CPU if needed)")
     
     main(args)
