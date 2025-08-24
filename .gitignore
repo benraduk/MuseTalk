@@ -23,3 +23,4 @@ exp_out
 /test_gpen_bfr_parameters_output
 /temp_frames
 /debug_mouth_masks
+*.pkl
