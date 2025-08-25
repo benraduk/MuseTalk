@@ -28,3 +28,28 @@ psutil>=7.0.0
 # Fallback for systems without CUDA
 # If onnxruntime-gpu fails, manually install: pip install onnxruntime>=1.22.0
 
+# TalkNet Active Speaker Detection Dependencies (Hybrid Implementation)
+# ============================================================================
+# HYBRID APPROACH: TalkNet audio/visual processing + YOLOv8 face detection
+# This avoids CMake/dlib dependency issues while maintaining ASD effectiveness
+# ============================================================================
+
+# Core TalkNet Dependencies (✅ Successfully installed)
+pretrainedmodels>=0.7.4              # Pre-trained CNN architectures for TalkNet
+resampy>=0.4.2                       # High-quality audio resampling for TalkNet
+webrtcvad>=2.0.10                    # Google WebRTC Voice Activity Detection
+scikit-learn>=1.1.0                  # ML utilities for feature processing
+scikit-image>=0.19.0                 # Image processing for visual features
+
+# Dependencies already satisfied by existing requirements:
+# - torch/torchaudio (TalkNet neural networks)
+# - numpy (numerical operations)
+# - opencv-python (video processing)
+# - librosa (audio feature extraction)
+# - scipy (signal processing)
+# - tqdm (progress tracking)
+
+# DISABLED Dependencies (require CMake - not Windows-friendly):
+# dlib>=19.24.0                      # Face detection (replaced by YOLOv8)
+# face-alignment>=1.3.5              # Face landmarks (using YOLOv8 landmarks instead)
+

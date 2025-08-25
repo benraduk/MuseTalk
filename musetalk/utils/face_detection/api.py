@@ -91,7 +91,11 @@ class FaceAlignment:
 class YOLOv8_face:
     def __init__(self, path = 'face_detection/weights/yolov8n-face.onnx', conf_thres=0.2, iou_thres=0.5,
                  temporal_weight=0.25, size_weight=0.30, center_weight=0.20, max_face_jump=0.3,
-                 primary_face_lock_threshold=10, primary_face_confidence_drop=0.8):
+                 primary_face_lock_threshold=10, primary_face_confidence_drop=0.8,
+                 # ASD parameters
+                 asd_enabled=False, asd_audio_window_ms=400, asd_confidence_threshold=0.3,
+                 asd_temporal_smoothing=0.8, asd_audio_weight=0.7, asd_visual_weight=0.3,
+                 asd_fallback_to_yolo=True):
         self.conf_threshold = conf_thres
         self.iou_threshold = iou_thres
         self.class_names = ['face']
@@ -121,9 +125,30 @@ class YOLOv8_face:
         self.input_height = self.input_shape[2] if len(self.input_shape) > 2 else 640
         self.input_width = self.input_shape[3] if len(self.input_shape) > 3 else 640
         
+        # Initialize ASD system if enabled
+        self.asd_enabled = asd_enabled
+        self.asd_detector = None
+        self.audio_sync = None
+        
+        if asd_enabled:
+            # TODO: TalkNet ASD integration will be implemented here
+            print("WARNING: TalkNet ASD not yet implemented")
+            print("Falling back to YOLOv8-only face selection")
+            self.asd_enabled = False
+        
         print(f"YOLOv8 model loaded: {path}")
         print(f"Input shape: {self.input_shape}")
         print(f"Providers: {self.session.get_providers()}")
+        print(f"ASD enabled: {self.asd_enabled}")
+    
+    def initialize_asd_audio(self, video_path):
+        """Initialize audio synchronization for ASD (call once per video)"""
+        if not self.asd_enabled or self.asd_detector is None:
+            return False
+        
+        # TODO: TalkNet audio synchronization will be implemented here
+        print("WARNING: TalkNet ASD audio sync not yet implemented")
+        return False
 
     def make_anchors(self, feats_hw, grid_cell_offset=0.5):
         """Generate anchors from features."""
@@ -356,7 +381,7 @@ class YOLOv8_face:
         
         return np.array(bounding_boxes), np.array(face_scores), np.array(face_landmarks_5)
     
-    def get_detections_for_batch(self, frames):
+    def get_detections_for_batch(self, frames, fps=25):
         """SFD-compatible batch detection interface with intelligent face selection"""
         results = []
         previous_bbox = None
@@ -369,13 +394,15 @@ class YOLOv8_face:
                 valid_indices = [i for i, conf in enumerate(det_conf) if conf > self.conf_threshold]
                 
                 if valid_indices:
-                    # Select the best face using multiple criteria
+                    # Select the best face using multiple criteria (now with ASD integration)
                     selected_bbox = self._select_best_face(
                         det_bboxes[valid_indices], 
                         det_conf[valid_indices], 
                         landmarks[valid_indices] if len(landmarks) > 0 else None,
                         frame.shape, 
-                        previous_bbox
+                        previous_bbox,
+                        frame_idx,
+                        fps
                     )
                     
                     if selected_bbox is not None:
@@ -392,17 +419,47 @@ class YOLOv8_face:
                 results.append(None)
         return results
     
-    def _select_best_face(self, bboxes, confidences, landmarks, frame_shape, previous_bbox):
+    def _select_best_face(self, bboxes, confidences, landmarks, frame_shape, previous_bbox, frame_idx=0, fps=25):
         """
-        Select the best face with primary face locking to prevent switching.
-        Once a primary face is established and locked, it will be preferred unless:
-        1. The primary face is no longer detected
-        2. The primary face confidence drops significantly
-        3. A much better face appears (rare override case)
+        Select the best face with ASD integration and primary face locking.
+        
+        Selection priority:
+        1. If ASD enabled and confident: Use ASD speaker selection
+        2. If ASD uncertain or disabled: Use YOLOv8 selection with face locking
+        3. Fallback: Standard YOLOv8 selection
         """
         if len(bboxes) == 0:
             return None
             
+        # Try ASD selection first if enabled
+        if self.asd_enabled and self.asd_detector is not None:
+            try:
+                # Get audio segment for current frame
+                audio_segment = None
+                if self.audio_sync is not None:
+                    audio_segment = self.audio_sync.get_audio_segment(frame_idx, fps)
+                
+                # Run ASD analysis
+                asd_scores = self.asd_detector.detect_active_speaker(
+                    bboxes, landmarks, audio_segment, frame_idx
+                )
+                
+                # Get ASD's best speaker
+                asd_primary = self.asd_detector.get_best_speaker(asd_scores) if len(asd_scores) > 0 else None
+                
+                if asd_primary is not None and asd_primary < len(bboxes):
+                    # ASD found a confident speaker
+                    selected_bbox = bboxes[asd_primary]
+                    self._update_primary_face_tracking(selected_bbox, confidences[asd_primary])
+                    return selected_bbox
+                elif not self.asd_fallback_to_yolo:
+                    # ASD enabled but no confident speaker and no fallback
+                    return None
+                    
+            except Exception as e:
+                print(f"ASD selection failed: {e}, falling back to YOLOv8")
+        
+        # Fallback to standard YOLOv8 selection
         if len(bboxes) == 1:
             selected_bbox = bboxes[0]
             self._update_primary_face_tracking(selected_bbox, confidences[0])

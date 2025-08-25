@@ -21,7 +21,7 @@ from musetalk.utils.face_parsing import FaceParsing
 from musetalk.utils.audio_processor import AudioProcessor
 from musetalk.utils.utils import get_file_type, get_video_fps, datagen, datagen_enhanced, load_all_model
 
-from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder
+from musetalk.utils.preprocessing import read_imgs, coord_placeholder
 from musetalk.utils.parallel_io import ParallelFrameWriter
 
 # Import GPEN-BFR face enhancer
@@ -143,35 +143,65 @@ def main(args):
                 'yolo_primary_face_confidence_drop'
             ]
             
-            for param in mouth_params + yolo_params:
+            # ASD parameters
+            asd_params = [
+                'asd_enabled', 'asd_audio_window_ms', 'asd_confidence_threshold',
+                'asd_temporal_smoothing', 'asd_audio_weight', 'asd_visual_weight',
+                'asd_fallback_to_yolo'
+            ]
+            
+            for param in mouth_params + yolo_params + asd_params:
                 if param in task_config:
                     setattr(args, param, task_config[param])
                     print(f"Using YAML parameter: {param} = {task_config[param]}")
                     if param == 'mask_shape':
                         print(f"DEBUG: mask_shape set to: {args.mask_shape}")
             
-            # REINITIALIZE FACE DETECTOR WITH YOLO PARAMETERS
-            # Check if any YOLOv8 parameters were specified in YAML
+            # REINITIALIZE FACE DETECTOR WITH YOLO AND ASD PARAMETERS
+            # Check if any YOLOv8 or ASD parameters were specified in YAML
             yolo_config_found = any(param in task_config for param in yolo_params)
-            if yolo_config_found:
+            asd_config_found = any(param in task_config for param in asd_params)
+            
+
+            
+            if yolo_config_found or asd_config_found:
                 from musetalk.utils.preprocessing import init_face_detector
                 print("Reinitializing face detector with YAML parameters...")
                 init_face_detector(
                     use_yolo=True,
+                    # YOLOv8 parameters
                     yolo_conf_threshold=getattr(args, 'yolo_conf_threshold', 0.5),
                     yolo_temporal_weight=getattr(args, 'yolo_temporal_weight', 0.25),
                     yolo_size_weight=getattr(args, 'yolo_size_weight', 0.30),
                     yolo_center_weight=getattr(args, 'yolo_center_weight', 0.20),
                     yolo_max_face_jump=getattr(args, 'yolo_max_face_jump', 0.3),
                     yolo_primary_face_lock_threshold=getattr(args, 'yolo_primary_face_lock_threshold', 10),
-                    yolo_primary_face_confidence_drop=getattr(args, 'yolo_primary_face_confidence_drop', 0.8)
+                    yolo_primary_face_confidence_drop=getattr(args, 'yolo_primary_face_confidence_drop', 0.8),
+                    # ASD parameters
+                    asd_enabled=getattr(args, 'asd_enabled', False),
+                    asd_audio_window_ms=getattr(args, 'asd_audio_window_ms', 400),
+                    asd_confidence_threshold=getattr(args, 'asd_confidence_threshold', 0.3),
+                    asd_temporal_smoothing=getattr(args, 'asd_temporal_smoothing', 0.8),
+                    asd_audio_weight=getattr(args, 'asd_audio_weight', 0.7),
+                    asd_visual_weight=getattr(args, 'asd_visual_weight', 0.3),
+                    asd_fallback_to_yolo=getattr(args, 'asd_fallback_to_yolo', True)
                 )
+            
+            # Import get_landmark_and_bbox after face detector is configured
+            from musetalk.utils.preprocessing import get_landmark_and_bbox
             
             # Set bbox_shift based on version
             if args.version == "v15":
                 bbox_shift = 0  # v15 uses fixed bbox_shift
             else:
                 bbox_shift = task_config.get("bbox_shift", args.bbox_shift)  # v1 uses config or default
+            
+            # Initialize ASD audio synchronization if enabled
+            if getattr(args, 'asd_enabled', False):
+                from musetalk.utils.preprocessing import fa
+                if fa is not None and hasattr(fa, 'initialize_asd_audio'):
+                    print("Initializing ASD audio synchronization...")
+                    fa.initialize_asd_audio(video_path)
             
             # Set output paths
             input_basename = os.path.basename(video_path).split('.')[0]

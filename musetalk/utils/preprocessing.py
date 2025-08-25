@@ -18,7 +18,11 @@ fa = None
 
 def init_face_detector(use_yolo=True, yolo_conf_threshold=0.5, yolo_temporal_weight=0.25, 
                       yolo_size_weight=0.30, yolo_center_weight=0.20, yolo_max_face_jump=0.3,
-                      yolo_primary_face_lock_threshold=10, yolo_primary_face_confidence_drop=0.8):
+                      yolo_primary_face_lock_threshold=10, yolo_primary_face_confidence_drop=0.8,
+                      # ASD parameters
+                      asd_enabled=False, asd_audio_window_ms=400, asd_confidence_threshold=0.3,
+                      asd_temporal_smoothing=0.8, asd_audio_weight=0.7, asd_visual_weight=0.3,
+                      asd_fallback_to_yolo=True):
     """Initialize face detector with configurable parameters"""
     global fa
     
@@ -35,7 +39,15 @@ def init_face_detector(use_yolo=True, yolo_conf_threshold=0.5, yolo_temporal_wei
                     center_weight=yolo_center_weight,
                     max_face_jump=yolo_max_face_jump,
                     primary_face_lock_threshold=yolo_primary_face_lock_threshold,
-                    primary_face_confidence_drop=yolo_primary_face_confidence_drop
+                    primary_face_confidence_drop=yolo_primary_face_confidence_drop,
+                    # ASD parameters
+                    asd_enabled=asd_enabled,
+                    asd_audio_window_ms=asd_audio_window_ms,
+                    asd_confidence_threshold=asd_confidence_threshold,
+                    asd_temporal_smoothing=asd_temporal_smoothing,
+                    asd_audio_weight=asd_audio_weight,
+                    asd_visual_weight=asd_visual_weight,
+                    asd_fallback_to_yolo=asd_fallback_to_yolo
                 )
                 print(f"Using YOLOv8 face detection (conf={yolo_conf_threshold}, "
                       f"temporal={yolo_temporal_weight}, size={yolo_size_weight}, "

@@ -23,7 +23,7 @@ task_0:
  # NOTE: ultra_wide_ellipse provides maximum coverage while maintaining natural proportions
  
  # Debug Options
- debug_mouth_mask: true            # Enable debug outputs for troubleshooting
+ debug_mouth_mask: false            # Enable debug outputs for troubleshooting
 
  # YOLOv8 Face Selection Parameters (NEW)
  yolo_conf_threshold: 0.5          # Minimum confidence for face detection (0.2-0.8)
@@ -32,6 +32,15 @@ task_0:
  yolo_center_weight: 0.20          # Weight for center position (prefer centered faces)
  yolo_max_face_jump: 0.3           # Maximum allowed face center jump (as fraction of frame width)
 
- # Primary Face Locking (ANTI-GLITCH PROTECTION)
+  # Primary Face Locking (ANTI-GLITCH PROTECTION)
  yolo_primary_face_lock_threshold: 10  # Lock primary face after N consistent frames (5-20)
  yolo_primary_face_confidence_drop: 0.8  # Allow confidence drop to this ratio before unlocking (0.6-0.9)
+
+ # Active Speaker Detection (ASD) - INTELLIGENT SPEAKER SELECTION
+ asd_enabled: true                     # Enable/disable ASD (true/false)
+ asd_audio_window_ms: 400             # Audio analysis window in milliseconds (300-600)
+ asd_confidence_threshold: 0.3        # Minimum ASD confidence for speaker selection (0.2-0.6)
+ asd_temporal_smoothing: 0.8          # Temporal smoothing factor for stability (0.5-0.9)
+ asd_audio_weight: 0.7                # Weight for audio features in fusion (0.4-0.8)
+ asd_visual_weight: 0.3               # Weight for visual features in fusion (0.2-0.6)
+ asd_fallback_to_yolo: true           # Fallback to YOLOv8 selection when ASD uncertain (recommended: true)

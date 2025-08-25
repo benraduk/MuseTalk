@@ -16,6 +16,7 @@ mkdir %CheckpointsDir%\whisper
 mkdir %CheckpointsDir%\gpen_bfr
 mkdir %CheckpointsDir%\face_detection
 mkdir %CheckpointsDir%\face_detection\weights
+mkdir %CheckpointsDir%\talknet
 
 :: Install required packages
 pip install -U "huggingface_hub[cli]"
@@ -36,8 +37,7 @@ hf download openai/whisper-tiny --local-dir %CheckpointsDir%\whisper --include "
 :: Download DWPose weights
 hf download yzd-v/DWPose --local-dir %CheckpointsDir%\dwpose --include "dw-ll_ucoco_384.pth"
 
-:: Download SyncNet weights
-hf download ByteDance/LatentSync --local-dir %CheckpointsDir%\syncnet --include "latentsync_syncnet.pt"
+
 
 
 
@@ -54,6 +54,19 @@ curl -L "https://github.com/facefusion/facefusion-assets/releases/download/model
 :: Download YOLOv8 Face Detection ONNX model
 echo Downloading YOLOv8 Face Detection model...
 curl -L "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/yoloface_8n.onnx" -o %CheckpointsDir%\face_detection\weights\yoloface_8n.onnx
+
+::  Download TalkNet Active Speaker Detection models
+echo Downloading TalkNet ASD models...
+
+:: Download pre-trained TalkNet model for active speaker detection
+curl -L "https://github.com/TaoRuijie/TalkNet-ASD/releases/download/v0.1/pretrain_TalkSet.model" -o %CheckpointsDir%\talknet\pretrain_TalkSet.model
+
+:: Download S3FD face detection model for TalkNet
+curl -L "https://github.com/TaoRuijie/TalkNet-ASD/releases/download/v0.1/sfd_face.pth" -o %CheckpointsDir%\talknet\sfd_face.pth
+
+:: Alternative download links (if above fails)
+:: You can also download from: https://drive.google.com/drive/folders/1WkJNKVetOOGXNaWoUNWaJLOKvbhvVRhd
+:: Manual download instructions will be provided if automatic download fails
 
 echo All weights have been downloaded successfully!
 endlocal 
