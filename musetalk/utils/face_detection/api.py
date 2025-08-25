@@ -131,10 +131,23 @@ class YOLOv8_face:
         self.audio_sync = None
         
         if asd_enabled:
-            # TODO: TalkNet ASD integration will be implemented here
-            print("WARNING: TalkNet ASD not yet implemented")
-            print("Falling back to YOLOv8-only face selection")
-            self.asd_enabled = False
+            try:
+                # Import TalkNet ASD (lazy import to avoid dependency issues)
+                from ..talknet_asd import TalkNetYOLOv8ASD
+                
+                self.asd_detector = TalkNetYOLOv8ASD(
+                    audio_window_ms=asd_audio_window_ms,
+                    confidence_threshold=asd_confidence_threshold,
+                    temporal_smoothing=asd_temporal_smoothing,
+                    audio_weight=asd_audio_weight,
+                    visual_weight=asd_visual_weight
+                )
+                self.asd_fallback_to_yolo = asd_fallback_to_yolo
+                print(f"TalkNet ASD enabled: audio_window={asd_audio_window_ms}ms, confidence={asd_confidence_threshold}")
+            except Exception as e:
+                print(f"WARNING: Could not initialize TalkNet ASD: {e}")
+                print("Falling back to YOLOv8-only face selection")
+                self.asd_enabled = False
         
         print(f"YOLOv8 model loaded: {path}")
         print(f"Input shape: {self.input_shape}")
@@ -146,9 +159,17 @@ class YOLOv8_face:
         if not self.asd_enabled or self.asd_detector is None:
             return False
         
-        # TODO: TalkNet audio synchronization will be implemented here
-        print("WARNING: TalkNet ASD audio sync not yet implemented")
-        return False
+        try:
+            success = self.asd_detector.initialize_audio(video_path)
+            if success:
+                print(f"TalkNet ASD audio synchronization initialized for: {video_path}")
+            else:
+                print("WARNING: TalkNet ASD audio sync failed - proceeding with visual-only analysis")
+            return success
+        except Exception as e:
+            print(f"WARNING: Could not initialize TalkNet ASD audio sync: {e}")
+            print("TalkNet ASD will run in visual-only mode")
+            return False
 
     def make_anchors(self, feats_hw, grid_cell_offset=0.5):
         """Generate anchors from features."""
@@ -431,24 +452,21 @@ class YOLOv8_face:
         if len(bboxes) == 0:
             return None
             
-        # Try ASD selection first if enabled
+        # Try TalkNet ASD selection first if enabled
         if self.asd_enabled and self.asd_detector is not None:
             try:
-                # Get audio segment for current frame
-                audio_segment = None
-                if self.audio_sync is not None:
-                    audio_segment = self.audio_sync.get_audio_segment(frame_idx, fps)
-                
-                # Run ASD analysis
+                # Run TalkNet ASD analysis
+                # Note: TalkNet expects all faces, but YOLOv8 currently returns single best face
+                # For now, we'll work with the single face and expand later for multi-face scenarios
                 asd_scores = self.asd_detector.detect_active_speaker(
-                    bboxes, landmarks, audio_segment, frame_idx
+                    bboxes, [landmarks] if landmarks is not None else [None], frame_idx, fps
                 )
                 
-                # Get ASD's best speaker
+                # Get TalkNet's best speaker
                 asd_primary = self.asd_detector.get_best_speaker(asd_scores) if len(asd_scores) > 0 else None
                 
                 if asd_primary is not None and asd_primary < len(bboxes):
-                    # ASD found a confident speaker
+                    # TalkNet found a confident speaker
                     selected_bbox = bboxes[asd_primary]
                     self._update_primary_face_tracking(selected_bbox, confidences[asd_primary])
                     return selected_bbox
@@ -457,7 +475,7 @@ class YOLOv8_face:
                     return None
                     
             except Exception as e:
-                print(f"ASD selection failed: {e}, falling back to YOLOv8")
+                print(f"TalkNet ASD selection failed: {e}, falling back to YOLOv8")
         
         # Fallback to standard YOLOv8 selection
         if len(bboxes) == 1:

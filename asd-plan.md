@@ -400,9 +400,99 @@ class TalkNetYOLOv8ASD:
 
 **Expected Outcome**: **Best-in-class ASD** combining TalkNet's AI sophistication with YOLOv8's proven face detection superiority
 
+### **🚨 CRITICAL ISSUE IDENTIFIED - PHASE 2 STATUS UPDATE**
+
+**⚠️ TalkNet + YOLOv8 Integration PARTIALLY WORKING - Critical Bugs Found!**
+
+#### **🔍 Root Cause Analysis (Latest Findings)**
+
+**User Report**: Still experiencing face switching glitches during frames with 2 faces, with AI mask clearly jumping between faces when secondary face comes into view.
+
+**🚨 Critical Issues Identified**:
+
+1. **ASD is Handicapped - Only Seeing Single Face**
+   - **Problem**: Line 462 in `musetalk/utils/face_detection/api.py` has bug: `[landmarks]` should be `landmarks`
+   - **Impact**: ASD receives landmarks wrapped in list instead of actual landmarks array
+   - **Result**: ASD cannot properly analyze multiple faces for speaker comparison
+   - **Code**: `asd_scores = self.asd_detector.detect_active_speaker(bboxes, [landmarks] if landmarks is not None else [None], frame_idx, fps)`
+   - **Fix**: `asd_scores = self.asd_detector.detect_active_speaker(bboxes, landmarks if landmarks is not None else None, frame_idx, fps)`
+
+2. **YOLOv8 Has Bias Toward New Faces**
+   - **Problem**: Temporal consistency weight too weak (line ~538)
+   - **Impact**: New faces score higher than established faces
+   - **Current**: `temporal_score = max(0.0, 1.0 - (temporal_distance / (frame_diagonal * 0.3)))`
+   - **Fix**: `temporal_score = max(0.0, 1.0 - (temporal_distance / (frame_diagonal * 0.15)))` (stronger penalty)
+
+3. **Insufficient Temporal Bias in Final Scoring**
+   - **Problem**: Temporal weight not strong enough in final face selection
+   - **Current**: Uses `self.temporal_weight` (0.25)
+   - **Fix**: Use `self.temporal_weight * 2.0` (0.5) for stronger stability bias
+
+#### **🛠️ Immediate Fixes Required**
+
+**Fix 1: Correct ASD Landmarks Parameter**
+```python
+# File: musetalk/utils/face_detection/api.py, line 462
+# WRONG:
+asd_scores = self.asd_detector.detect_active_speaker(
+    bboxes, [landmarks] if landmarks is not None else [None], frame_idx, fps
+)
+
+# CORRECT:
+asd_scores = self.asd_detector.detect_active_speaker(
+    bboxes, landmarks if landmarks is not None else None, frame_idx, fps
+)
+```
+
+**Fix 2: Strengthen Temporal Consistency**
+```python
+# File: musetalk/utils/face_detection/api.py, line ~538
+# CURRENT (weak temporal consistency):
+temporal_score = max(0.0, 1.0 - (temporal_distance / (frame_diagonal * 0.3)))
+
+# STRONGER (prevents face jumping):
+temporal_score = max(0.0, 1.0 - (temporal_distance / (frame_diagonal * 0.15)))
+```
+
+**Fix 3: Increase Temporal Weight in Final Scoring**
+```python
+# File: musetalk/utils/face_detection/api.py, line ~570
+# CURRENT:
+final_score = (confidence_score * 0.3 + size_score * self.size_weight + 
+               center_score * self.center_weight + temporal_score * self.temporal_weight + 
+               quality_score * 0.1)
+
+# STRONGER temporal bias:
+final_score = (confidence_score * 0.2 + size_score * self.size_weight + 
+               center_score * self.center_weight + temporal_score * (self.temporal_weight * 2.0) + 
+               quality_score * 0.1)
+```
+
+**Fix 4: Add Debug Output**
+```python
+# After line 463, add:
+print(f"Frame {frame_idx}: ASD analyzing {len(bboxes)} faces, scores: {asd_scores}")
+```
+
+#### **🎯 Why These Fixes Will Work**
+
+1. **Enable Proper Multi-Face ASD**: Fix landmarks bug so ASD can compare ALL detected faces
+2. **Prevent Face Jumping**: Strengthen temporal consistency to heavily penalize switching to new faces
+3. **Maintain Speaker Accuracy**: ASD will work correctly once it can see all faces
+4. **Add Visibility**: Debug output will show what ASD is actually doing
+
+#### **📊 Current Status Summary**
+
+- ✅ **TalkNet Integration**: Successfully integrated and working
+- ✅ **YAML Configuration**: Working correctly (`asd_enabled: true` detected)
+- ✅ **Pipeline Integration**: Face detector reinitialization working
+- ❌ **Multi-Face Analysis**: BROKEN - ASD only seeing single face due to landmarks bug
+- ❌ **Face Stability**: WEAK - YOLOv8 switching to new faces too easily
+- 🔧 **Next Step**: Apply the 4 critical fixes above
+
 ### **✅ PHASE 2 IMPLEMENTATION STATUS**
 
-**🎉 TalkNet + YOLOv8 Integration COMPLETED!**
+**🔧 TalkNet + YOLOv8 Integration NEEDS CRITICAL FIXES!**
 
 #### **📁 Files Created:**
 - **`debug/talknet_asd.py`** - TalkNet ASD integration class with YOLOv8 hybrid architecture
@@ -819,7 +909,13 @@ active_speaker_detection:
 | Phase 4 | 2-3 days | Medium | ⏳ **PENDING** | Advanced multi-speaker scenarios | Advanced conversation analysis |
 | **Total** | **10-15 days** | | **🔄 60% Complete** | **Production-grade ASD integration** | **TalkNet + YOLOv8 hybrid** |
 
-**🎯 Current Milestone**: Implementing TalkNet models with YOLOv8 integration to achieve superior ASD performance.
+**🚨 Current Milestone**: **URGENT - Apply 4 critical fixes to resolve face switching glitches**:
+1. Fix ASD landmarks parameter bug (line 462 in `musetalk/utils/face_detection/api.py`)
+2. Strengthen temporal consistency (line ~538) 
+3. Increase temporal weight in scoring (line ~570)
+4. Add debug output for visibility
+
+**Phase 2 Status**: 🔧 **CRITICAL FIXES NEEDED** - Integration working but ASD handicapped by landmarks bug
 
 ---
 

@@ -1,7 +1,7 @@
 task_0:
  video_path: "data/video/Canva_en.mp4"
  audio_path: "data/audio/Canva_FR.m4a"
- result_name: "Canva_yolo.mp4"
+ result_name: "Canva_asd.mp4"
  result_dir: "./results"
  bbox_shift: 7
  
