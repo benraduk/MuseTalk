@@ -1,0 +1,20 @@
+task_0: 
+ video_path: "data/video/Canva_en.mp4" 
+ audio_path: "data/audio/Canva_FR.m4a" 
+ result_name: "canva_WITH_erosion.mp4" 
+ result_dir: "./results" 
+ bbox_shift: 7 
+ ellipse_padding_factor: 0.02 
+ upper_boundary_ratio: 0.22 
+ expand_factor: 1.9 
+ use_elliptical_mask: true 
+ blur_kernel_ratio: 0.06 
+ mouth_vertical_offset: 0 
+ mouth_scale_factor: 1.0 
+ mask_shape: "ultra_wide_ellipse" 
+ mask_height_ratio: 0.85 
+ mask_corner_radius: 0.15 
+ enable_pre_erosion: true 
+ erosion_ratio: 0.008 
+ erosion_iterations: 1 
+ debug_mouth_mask: true 

@@ -24,3 +24,7 @@ exp_out
 /temp_frames
 /debug_mouth_masks
 *.pkl
+/debug_erosion_test
+/debug_output
+/erosion_test_results
+*.mp4

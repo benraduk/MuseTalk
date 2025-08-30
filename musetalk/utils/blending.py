@@ -32,7 +32,7 @@ def face_seg(image, mode="raw", fp=None):
     return seg_image
 
 
-def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode="raw", fp=None, use_elliptical_mask=True, ellipse_padding_factor=0.1, blur_kernel_ratio=0.05, landmarks=None, mouth_vertical_offset=0.0, mouth_scale_factor=1.0, debug_mouth_mask=False, debug_frame_idx=None, debug_output_dir=None, mask_shape="ellipse", mask_height_ratio=0.4, mask_corner_radius=0.2):
+def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode="raw", fp=None, use_elliptical_mask=True, ellipse_padding_factor=0.1, blur_kernel_ratio=0.05, landmarks=None, mouth_vertical_offset=0.0, mouth_scale_factor=1.0, debug_mouth_mask=False, debug_frame_idx=None, debug_output_dir=None, mask_shape="ellipse", mask_height_ratio=0.4, mask_corner_radius=0.2, enable_pre_erosion=False, erosion_ratio=0.008, erosion_iterations=1):
     """
     将裁剪的面部图像粘贴回原始图像，并进行一些处理。
     Enhanced with landmark-based surgical mouth positioning for improved accuracy.
@@ -56,6 +56,9 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
         mask_shape (str): Shape of blending mask ("ellipse", "triangle", "rounded_triangle", "wide_ellipse", "ultra_wide_ellipse")
         mask_height_ratio (float): Height ratio for mask relative to mouth width (0.3-0.8)
         mask_corner_radius (float): Corner radius for rounded shapes (0.0-0.5)
+        enable_pre_erosion (bool): Enable morphological erosion before feathering to eliminate lip bleed-through
+        erosion_ratio (float): Erosion kernel size as ratio of face width (0.005-0.015)
+        erosion_iterations (int): Number of erosion iterations (1-2)
 
     Returns:
         numpy.ndarray: 处理后的图像。
@@ -402,11 +405,30 @@ def get_image(image, face, face_box, upper_boundary_ratio=0.5, expand=1.5, mode=
     modified_mask_image.paste(mask_image.crop((0, top_boundary, width, height)), (0, top_boundary))  # 粘贴上半部分掩码
     
     
-    # 对掩码进行高斯模糊，使边缘更平滑
-    blur_kernel_size = int(blur_kernel_ratio * ori_shape[0] // 2 * 2) + 1  # 计算模糊核大小
-    mask_array = cv2.GaussianBlur(np.array(modified_mask_image), (blur_kernel_size, blur_kernel_size), 0)  # 高斯模糊
-    #mask_array = np.array(modified_mask_image)
-    mask_image = Image.fromarray(mask_array)  # 将模糊后的掩码转换回 PIL 图像
+    # 🔥 MORPHOLOGICAL EROSION: Eliminate original lip bleed-through (Phase 1 Critical Fix)
+    if enable_pre_erosion:
+        # Calculate erosion kernel size normalized to face width
+        erosion_kernel_size = max(1, int(erosion_ratio * ori_shape[0]))
+        erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, 
+                                                   (erosion_kernel_size, erosion_kernel_size))
+        
+        # Apply erosion to shrink mask inward, eliminating original lip edges
+        mask_array_eroded = cv2.erode(np.array(modified_mask_image), 
+                                      erosion_kernel, 
+                                      iterations=erosion_iterations)
+        
+        # Apply Gaussian blur to eroded mask for smooth transitions
+        blur_kernel_size = int(blur_kernel_ratio * ori_shape[0] // 2 * 2) + 1
+        mask_array = cv2.GaussianBlur(mask_array_eroded, (blur_kernel_size, blur_kernel_size), 0)
+        
+        if debug_mouth_mask and debug_frame_idx is not None:
+            print(f"🔥 Erosion applied: kernel={erosion_kernel_size}px, iterations={erosion_iterations}, face_width={ori_shape[0]}px")
+    else:
+        # Original Gaussian blur (fallback for comparison)
+        blur_kernel_size = int(blur_kernel_ratio * ori_shape[0] // 2 * 2) + 1
+        mask_array = cv2.GaussianBlur(np.array(modified_mask_image), (blur_kernel_size, blur_kernel_size), 0)
+    
+    mask_image = Image.fromarray(mask_array)  # 将处理后的掩码转换回 PIL 图像
     
     # 将裁剪的面部图像粘贴回扩展后的面部区域
     face_large.paste(face, (x - x_s, y - y_s, x1 - x_s, y1 - y_s))

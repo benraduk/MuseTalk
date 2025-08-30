@@ -1,14 +1,14 @@
 task_0:
- video_path: "data/video/ff-video.mp4"
- audio_path: "data/audio/ff-vocals.mp3"
- result_name: "ff-test.mp4"
+ video_path: "data/video/Canva_en.mp4"
+ audio_path: "data/audio/Canva_FR.m4a"
+ result_name: "erosion_test_with_erosion.mp4"
  result_dir: "./results"
  bbox_shift: 7
  
  # YOLOv8 Surgical Mouth Positioning Parameters - NATURAL SIZING
- ellipse_padding_factor: 0.05      # ULTRA coverage (smaller = larger coverage) 
+ ellipse_padding_factor: 0.02      # ULTRA coverage (smaller = larger coverage) 
  upper_boundary_ratio: 0.22        # Maximum face coverage (smaller = more coverage)  
- expand_factor: 1.5                # Generous face crop expansion for edge cases
+ expand_factor: 1.9                # Generous face crop expansion for edge cases
  use_elliptical_mask: true         # Use elliptical mask (recommended)
  blur_kernel_ratio: 0.06           # Optimal mask smoothing for natural blending
  
@@ -18,16 +18,15 @@ task_0:
 
  # Advanced Mask Shape Options - ULTRA WIDE COVERAGE
  mask_shape: "ultra_wide_ellipse"        # BEST: 80% wider than standard ellipse
- mask_height_ratio: 0.6           # Slightly reduced for more natural proportions
+ mask_height_ratio: 0.85           # Slightly reduced for more natural proportions
  mask_corner_radius: 0.15          # Softer corners for better blending
- # NOTE: ultra_wide_ellipse provides maximum coverage while maintaining natural proportions
- 
- # Morphological Erosion Parameters (NEW - Phase 1 Critical Fix)
- enable_pre_erosion: true              # Enable erosion before feathering to eliminate lip bleed-through
- erosion_ratio: 0.008                  # Erosion kernel size as ratio of face width (0.005-0.015)
- erosion_iterations: 1                 # Number of erosion iterations (1-2)
 
-# Debug Options
+ # Morphological Erosion Parameters (NEW - Phase 1 Critical Fix)
+enable_pre_erosion: true              # ENABLED - eliminate lip bleed-through
+erosion_ratio: 0.008                  # Erosion kernel size as ratio of face width (0.005-0.015)
+erosion_iterations: 1                 # Number of erosion iterations (1-2)
+
+ # Debug Options
  debug_mouth_mask: true            # Enable debug outputs for troubleshooting
 
  # YOLOv8 Face Selection Parameters (NEW)

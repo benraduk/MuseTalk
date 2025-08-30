@@ -133,7 +133,8 @@ def main(args):
                 'ellipse_padding_factor', 'upper_boundary_ratio', 'expand_factor', 
                 'use_elliptical_mask', 'blur_kernel_ratio', 'mouth_vertical_offset', 
                 'mouth_scale_factor', 'debug_mouth_mask', 'mask_shape', 
-                'mask_height_ratio', 'mask_corner_radius'
+                'mask_height_ratio', 'mask_corner_radius', 'enable_pre_erosion',
+                'erosion_ratio', 'erosion_iterations'
             ]
             
             # YOLOv8 face selection parameters
@@ -404,7 +405,10 @@ def main(args):
                                     debug_output_dir=debug_output_dir,
                                     mask_shape=args.mask_shape,
                                     mask_height_ratio=args.mask_height_ratio,
-                                    mask_corner_radius=args.mask_corner_radius
+                                    mask_corner_radius=args.mask_corner_radius,
+                                    enable_pre_erosion=getattr(args, 'enable_pre_erosion', False),
+                                    erosion_ratio=getattr(args, 'erosion_ratio', 0.008),
+                                    erosion_iterations=getattr(args, 'erosion_iterations', 1)
                                 )
                             else:
                                 combine_frame = get_image(
@@ -423,7 +427,10 @@ def main(args):
                                     debug_output_dir=debug_output_dir,
                                     mask_shape=args.mask_shape,
                                     mask_height_ratio=args.mask_height_ratio,
-                                    mask_corner_radius=args.mask_corner_radius
+                                    mask_corner_radius=args.mask_corner_radius,
+                                    enable_pre_erosion=getattr(args, 'enable_pre_erosion', False),
+                                    erosion_ratio=getattr(args, 'erosion_ratio', 0.008),
+                                    erosion_iterations=getattr(args, 'erosion_iterations', 1)
                                 )
                         except Exception as e:
                             print(f"Frame {i}: Processing failed, using passthrough - {e}")
